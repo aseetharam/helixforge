@@ -287,13 +287,53 @@ helixforge homology list-databases
 ---
 
 ## Phase 6: QC System
-Status: [ ] Not started
+Status: [x] Complete
 
 Deliverables:
-- [ ] qc/flags.py - QC flag definitions
-- [ ] qc/filters.py - Tiered filtering logic
-- [ ] qc/report.py - HTML report generation
-- [ ] Summary statistics output
+- [x] qc/flags.py - QC flag definitions (QCFlag, Flags registry, GeneQC)
+- [x] qc/aggregate.py - QCAggregator for combining module results
+- [x] qc/filters.py - GeneFilter with preset profiles
+- [x] qc/report.py - HTML report generation with Chart.js
+- [x] CLI qc subcommand group (aggregate, report, filter, tiered-output, list-flags)
+- [x] tests/test_qc.py - Comprehensive test suite
+
+Data structures implemented:
+- FlagSeverity enum (INFO, WARNING, ERROR, CRITICAL) with comparison operators
+- FlagCategory enum (CONFIDENCE, SPLICE, HOMOLOGY, STRUCTURE, ANNOTATION)
+- QCFlag attrs class (frozen, hashable for use in sets)
+- Flags registry class with 23 predefined flags
+- GeneQC attrs class with tier classification and flag management
+- QCAggregatorConfig for threshold configuration
+- QCAggregator for combining confidence/splice/homology results
+- FilterCriteria for custom filter definitions
+- FilterResult for filter operation results
+- GeneFilter with preset profiles (high_confidence, publication_ready, etc.)
+- QCReportGenerator with embedded HTML/Chart.js template
+- ReportConfig and ReportData for report customization
+
+Tier classification logic:
+- reject: CRITICAL flags or confidence < 0.50
+- low: ERROR flags or confidence < 0.70
+- medium: WARNING flags or confidence < 0.85
+- high: No significant flags and confidence >= 0.85
+
+CLI usage:
+```
+# Aggregate results from modules
+helixforge qc aggregate --confidence-tsv scores.tsv --splice-tsv splice.tsv --homology-tsv validation.tsv -o qc_results.tsv
+
+# Generate HTML report
+helixforge qc report --qc-tsv qc_results.tsv -o report.html
+
+# Filter genes with presets
+helixforge qc filter --qc-tsv qc_results.tsv --preset publication_ready -o filtered.txt --gene-list-only
+
+# Create tiered output
+helixforge qc tiered-output --qc-tsv qc_results.tsv -o tiered/ --input-gff genes.gff3
+
+# List all flags
+helixforge qc list-flags --category homology
+```
 
 ---
 

@@ -199,57 +199,589 @@ def add_evidence(
 
 
 # =============================================================================
-# qc command
+# qc command group
 # =============================================================================
 
 
-@main.command()
+@main.group()
+def qc():
+    """Quality control and reporting.
+
+    Commands for aggregating module results, generating QC reports,
+    filtering genes by criteria, and creating tiered output sets.
+
+    Recommended workflow:
+        1. Aggregate results: helixforge qc aggregate
+        2. Generate report: helixforge qc report
+        3. Filter genes: helixforge qc filter
+        4. Create tiered outputs: helixforge qc tiered-output
+    """
+    pass
+
+
+@qc.command("aggregate")
 @click.option(
-    "-g",
-    "--gff",
+    "--confidence-tsv",
     type=click.Path(exists=True, path_type=Path),
-    required=True,
-    help="Input GFF3 file to analyze.",
+    help="Confidence scores TSV from 'helixforge confidence'.",
+)
+@click.option(
+    "--splice-tsv",
+    type=click.Path(exists=True, path_type=Path),
+    help="Splice report TSV from 'helixforge splice'.",
+)
+@click.option(
+    "--homology-tsv",
+    type=click.Path(exists=True, path_type=Path),
+    help="Homology validation TSV from 'helixforge homology validate'.",
 )
 @click.option(
     "-o",
     "--output",
     type=click.Path(path_type=Path),
     required=True,
-    help="Output report file (HTML or PDF based on extension).",
+    help="Output aggregated QC TSV file.",
 )
 @click.option(
-    "--genome",
-    type=click.Path(exists=True, path_type=Path),
-    help="Reference genome for sequence-based QC metrics.",
-)
-@click.option(
-    "--format",
-    "output_format",
-    type=click.Choice(["html", "pdf", "json"]),
-    default="html",
+    "--high-threshold",
+    type=float,
+    default=0.85,
     show_default=True,
-    help="Output format for the report.",
+    help="Minimum confidence for high tier.",
+)
+@click.option(
+    "--medium-threshold",
+    type=float,
+    default=0.70,
+    show_default=True,
+    help="Minimum confidence for medium tier.",
+)
+@click.option(
+    "--low-threshold",
+    type=float,
+    default=0.50,
+    show_default=True,
+    help="Minimum confidence for low tier (below = reject).",
 )
 @click.pass_context
-def qc(
+def qc_aggregate(
     ctx: click.Context,
-    gff: Path,
+    confidence_tsv: Optional[Path],
+    splice_tsv: Optional[Path],
+    homology_tsv: Optional[Path],
     output: Path,
-    genome: Optional[Path],
-    output_format: str,
+    high_threshold: float,
+    medium_threshold: float,
+    low_threshold: float,
 ) -> None:
-    """Generate quality control report for gene predictions.
+    """Aggregate QC results from confidence, splice, and homology modules.
 
-    Analyzes gene predictions and produces a comprehensive QC report
-    including statistics, flag summaries, and visualizations.
+    Combines results from individual analysis modules into unified GeneQC
+    objects with tier classifications and appropriate flags.
 
     Example:
-        $ helixforge qc -g refined.gff3 -o report.html
+        $ helixforge qc aggregate --confidence-tsv scores.tsv --splice-tsv splice_report.tsv --homology-tsv validation.tsv -o qc_results.tsv
     """
-    # TODO: Implement QC report generation
-    console.print("[yellow]qc command not yet implemented[/yellow]")
-    raise SystemExit(1)
+    from helixforge.qc import QCAggregator, QCAggregatorConfig, export_qc_tsv
+
+    verbose = ctx.obj.get("verbose", False)
+    quiet = ctx.obj.get("quiet", False)
+
+    if not confidence_tsv and not splice_tsv and not homology_tsv:
+        console.print("[red]Error:[/red] At least one input TSV is required")
+        raise SystemExit(1)
+
+    if not quiet:
+        if confidence_tsv:
+            console.print(f"[blue]Confidence TSV:[/blue] {confidence_tsv}")
+        if splice_tsv:
+            console.print(f"[blue]Splice TSV:[/blue] {splice_tsv}")
+        if homology_tsv:
+            console.print(f"[blue]Homology TSV:[/blue] {homology_tsv}")
+
+    try:
+        config = QCAggregatorConfig(
+            high_confidence_threshold=high_threshold,
+            medium_confidence_threshold=medium_threshold,
+            low_confidence_threshold=low_threshold,
+        )
+
+        aggregator = QCAggregator(config)
+        gene_qcs = aggregator.aggregate_from_files(
+            confidence_tsv=confidence_tsv,
+            splice_tsv=splice_tsv,
+            homology_tsv=homology_tsv,
+        )
+
+        export_qc_tsv(gene_qcs, output)
+
+        if not quiet:
+            console.print(f"[green]Aggregated {len(gene_qcs)} genes to:[/green] {output}")
+
+            # Print tier summary
+            from helixforge.qc import summarize_qc_results
+            summary = summarize_qc_results(gene_qcs)
+            tier_counts = summary.get("tier_counts", {})
+            console.print("\n[bold]Tier Distribution:[/bold]")
+            for tier in ["high", "medium", "low", "reject"]:
+                count = tier_counts.get(tier, 0)
+                pct = count / len(gene_qcs) * 100 if gene_qcs else 0
+                console.print(f"  {tier.capitalize()}: {count} ({pct:.1f}%)")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise SystemExit(1)
+
+
+@qc.command("report")
+@click.option(
+    "--qc-tsv",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Aggregated QC TSV from 'helixforge qc aggregate'.",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Output report file (HTML, TXT, or JSON based on extension).",
+)
+@click.option(
+    "--title",
+    type=str,
+    default="HelixForge QC Report",
+    show_default=True,
+    help="Report title.",
+)
+@click.option(
+    "--description",
+    type=str,
+    default="",
+    help="Report description.",
+)
+@click.pass_context
+def qc_report(
+    ctx: click.Context,
+    qc_tsv: Path,
+    output: Path,
+    title: str,
+    description: str,
+) -> None:
+    """Generate QC report from aggregated results.
+
+    Creates comprehensive reports in HTML (with Chart.js visualizations),
+    plain text, or JSON formats.
+
+    Example:
+        $ helixforge qc report --qc-tsv qc_results.tsv -o report.html
+        $ helixforge qc report --qc-tsv qc_results.tsv -o summary.txt
+    """
+    from helixforge.qc import (
+        GeneQC,
+        QCReportGenerator,
+        generate_json_report,
+        generate_summary_report,
+    )
+
+    verbose = ctx.obj.get("verbose", False)
+    quiet = ctx.obj.get("quiet", False)
+
+    if not quiet:
+        console.print(f"[blue]Loading QC data from:[/blue] {qc_tsv}")
+
+    try:
+        # Load QC data
+        gene_qcs = _load_qc_tsv(qc_tsv)
+
+        if not quiet:
+            console.print(f"[green]Loaded {len(gene_qcs)} genes[/green]")
+
+        # Generate report based on extension
+        suffix = output.suffix.lower()
+
+        if suffix == ".html":
+            generator = QCReportGenerator()
+            generator.generate(gene_qcs, output, title=title, description=description)
+        elif suffix == ".txt":
+            generate_summary_report(gene_qcs, output)
+        elif suffix == ".json":
+            generate_json_report(gene_qcs, output)
+        else:
+            console.print(f"[red]Error:[/red] Unsupported format: {suffix}")
+            console.print("  Supported: .html, .txt, .json")
+            raise SystemExit(1)
+
+        if not quiet:
+            console.print(f"[green]Wrote report to:[/green] {output}")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise SystemExit(1)
+
+
+@qc.command("filter")
+@click.option(
+    "--qc-tsv",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Aggregated QC TSV from 'helixforge qc aggregate'.",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Output filtered gene list (TXT) or filtered QC TSV.",
+)
+@click.option(
+    "--preset",
+    type=click.Choice([
+        "high_confidence",
+        "publication_ready",
+        "has_homology",
+        "has_rnaseq_support",
+        "no_structural_issues",
+    ]),
+    help="Use a preset filter profile.",
+)
+@click.option(
+    "--tiers",
+    type=str,
+    help="Comma-separated list of tiers to include (e.g., 'high,medium').",
+)
+@click.option(
+    "--min-confidence",
+    type=float,
+    help="Minimum confidence score.",
+)
+@click.option(
+    "--exclude-flags",
+    type=str,
+    help="Comma-separated flag codes to exclude.",
+)
+@click.option(
+    "--gene-list-only",
+    is_flag=True,
+    help="Output gene IDs only (one per line).",
+)
+@click.pass_context
+def qc_filter(
+    ctx: click.Context,
+    qc_tsv: Path,
+    output: Path,
+    preset: Optional[str],
+    tiers: Optional[str],
+    min_confidence: Optional[float],
+    exclude_flags: Optional[str],
+    gene_list_only: bool,
+) -> None:
+    """Filter genes based on QC criteria.
+
+    Apply preset filter profiles or custom criteria to select genes.
+
+    \b
+    Preset profiles:
+    - high_confidence: High tier, confidence >= 0.85, no warnings
+    - publication_ready: High/medium tier, no errors, no critical issues
+    - has_homology: Genes with protein homology support
+    - has_rnaseq_support: Genes with RNA-seq splice junction support
+    - no_structural_issues: No internal stops, frameshifts, or missing codons
+
+    Example:
+        $ helixforge qc filter --qc-tsv qc_results.tsv --preset publication_ready -o filtered.txt --gene-list-only
+        $ helixforge qc filter --qc-tsv qc_results.tsv --tiers high,medium --min-confidence 0.7 -o filtered_qc.tsv
+    """
+    from helixforge.qc import (
+        FilterCriteria,
+        Flags,
+        GeneFilter,
+        export_qc_tsv,
+        summarize_filter_results,
+    )
+
+    verbose = ctx.obj.get("verbose", False)
+    quiet = ctx.obj.get("quiet", False)
+
+    if not quiet:
+        console.print(f"[blue]Loading QC data from:[/blue] {qc_tsv}")
+
+    try:
+        gene_qcs = _load_qc_tsv(qc_tsv)
+
+        if not quiet:
+            console.print(f"[green]Loaded {len(gene_qcs)} genes[/green]")
+
+        # Create filter based on options
+        if preset:
+            if preset == "high_confidence":
+                gene_filter = GeneFilter.high_confidence()
+            elif preset == "publication_ready":
+                gene_filter = GeneFilter.publication_ready()
+            elif preset == "has_homology":
+                gene_filter = GeneFilter.has_homology()
+            elif preset == "has_rnaseq_support":
+                gene_filter = GeneFilter.has_rnaseq_support()
+            elif preset == "no_structural_issues":
+                gene_filter = GeneFilter.no_structural_issues()
+            else:
+                raise ValueError(f"Unknown preset: {preset}")
+
+            if not quiet:
+                console.print(f"[blue]Using preset:[/blue] {preset}")
+
+        else:
+            # Build custom criteria
+            allowed_tiers = None
+            if tiers:
+                allowed_tiers = [t.strip() for t in tiers.split(",")]
+
+            exclude_flag_list = []
+            if exclude_flags:
+                for code in exclude_flags.split(","):
+                    flag = Flags.get_by_code(code.strip())
+                    if flag:
+                        exclude_flag_list.append(flag)
+                    else:
+                        console.print(f"[yellow]Warning:[/yellow] Unknown flag code: {code.strip()}")
+
+            criteria = FilterCriteria(
+                name="custom",
+                description="Custom filter from CLI",
+                min_confidence=min_confidence,
+                allowed_tiers=allowed_tiers,
+                exclude_flags=exclude_flag_list,
+            )
+            gene_filter = GeneFilter(criteria)
+
+        # Apply filter
+        result = gene_filter.apply(gene_qcs)
+
+        if not quiet:
+            console.print(f"\n[bold]Filter Results:[/bold]")
+            console.print(summarize_filter_results(result))
+
+        # Write output
+        if gene_list_only:
+            with open(output, "w") as f:
+                for gene_id in result.passed_ids():
+                    f.write(f"{gene_id}\n")
+        else:
+            passed_qcs = {qc.gene_id: qc for qc in result.passed}
+            export_qc_tsv(passed_qcs, output)
+
+        if not quiet:
+            console.print(f"\n[green]Wrote {result.pass_count} genes to:[/green] {output}")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise SystemExit(1)
+
+
+@qc.command("tiered-output")
+@click.option(
+    "--qc-tsv",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Aggregated QC TSV from 'helixforge qc aggregate'.",
+)
+@click.option(
+    "-o",
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Output directory for tiered gene lists.",
+)
+@click.option(
+    "--prefix",
+    type=str,
+    default="genes",
+    show_default=True,
+    help="Prefix for output file names.",
+)
+@click.option(
+    "--input-gff",
+    type=click.Path(exists=True, path_type=Path),
+    help="Input GFF3 to create tiered GFF outputs.",
+)
+@click.pass_context
+def qc_tiered_output(
+    ctx: click.Context,
+    qc_tsv: Path,
+    output_dir: Path,
+    prefix: str,
+    input_gff: Optional[Path],
+) -> None:
+    """Generate tiered gene lists and optionally GFF files.
+
+    Creates separate files for each quality tier (high, medium, low, reject),
+    and optionally creates filtered GFF files.
+
+    Example:
+        $ helixforge qc tiered-output --qc-tsv qc_results.tsv -o tiered_output/
+        $ helixforge qc tiered-output --qc-tsv qc_results.tsv -o tiered_output/ --input-gff genes.gff3
+    """
+    from helixforge.qc import write_filtered_gff, write_tiered_gene_lists
+
+    verbose = ctx.obj.get("verbose", False)
+    quiet = ctx.obj.get("quiet", False)
+
+    if not quiet:
+        console.print(f"[blue]Loading QC data from:[/blue] {qc_tsv}")
+
+    try:
+        gene_qcs = _load_qc_tsv(qc_tsv)
+
+        if not quiet:
+            console.print(f"[green]Loaded {len(gene_qcs)} genes[/green]")
+
+        # Write tiered gene lists
+        output_files = write_tiered_gene_lists(gene_qcs, output_dir, prefix)
+
+        if not quiet:
+            console.print("\n[bold]Created tiered gene lists:[/bold]")
+            for tier, path in sorted(output_files.items()):
+                n_genes = sum(1 for _ in open(path))
+                console.print(f"  {tier}: {path} ({n_genes} genes)")
+
+        # Write tiered GFFs if requested
+        if input_gff:
+            for tier in ["high", "medium", "low"]:
+                gff_path = output_dir / f"{prefix}_{tier}.gff3"
+                n_written = write_filtered_gff(
+                    gene_qcs, input_gff, gff_path, tiers=[tier]
+                )
+                if not quiet:
+                    console.print(f"  {tier} GFF: {gff_path} ({n_written} genes)")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise SystemExit(1)
+
+
+@qc.command("list-flags")
+@click.option(
+    "--category",
+    type=click.Choice(["confidence", "splice", "homology", "structure", "annotation"]),
+    help="Filter flags by category.",
+)
+@click.option(
+    "--severity",
+    type=click.Choice(["info", "warning", "error", "critical"]),
+    help="Filter flags by severity.",
+)
+def qc_list_flags(
+    category: Optional[str],
+    severity: Optional[str],
+) -> None:
+    """List all available QC flags.
+
+    Shows flag codes, names, descriptions, categories, and severity levels.
+
+    Example:
+        $ helixforge qc list-flags
+        $ helixforge qc list-flags --category homology
+        $ helixforge qc list-flags --severity error
+    """
+    from helixforge.qc import FlagCategory, FlagSeverity, Flags
+
+    flags = Flags.get_all()
+
+    # Filter if requested
+    if category:
+        cat = FlagCategory(category)
+        flags = [f for f in flags if f.category == cat]
+
+    if severity:
+        sev = FlagSeverity(severity)
+        flags = [f for f in flags if f.severity == sev]
+
+    # Sort by category, then severity, then code
+    flags = sorted(flags, key=lambda f: (f.category.value, f.severity.value, f.code))
+
+    console.print("[bold]QC Flags:[/bold]\n")
+
+    current_category = None
+    for flag in flags:
+        if flag.category != current_category:
+            current_category = flag.category
+            console.print(f"\n[bold blue]{current_category.value.upper()}[/bold blue]")
+
+        severity_color = {
+            "info": "cyan",
+            "warning": "yellow",
+            "error": "red",
+            "critical": "bold red",
+        }.get(flag.severity.value, "white")
+
+        console.print(f"  [{severity_color}]{flag.code}[/{severity_color}]")
+        console.print(f"    Name: {flag.name}")
+        console.print(f"    Description: {flag.description}")
+        console.print(f"    Severity: {flag.severity.value}")
+        console.print()
+
+
+def _load_qc_tsv(path: Path) -> dict:
+    """Load GeneQC objects from aggregated TSV file."""
+    import csv
+    from helixforge.qc import Flags, GeneQC
+
+    gene_qcs = {}
+    with open(path) as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        for row in reader:
+            gene_id = row.get("gene_id", "")
+            if not gene_id:
+                continue
+
+            gene_qc = GeneQC(
+                gene_id=gene_id,
+                tier=row.get("tier", "unclassified"),
+            )
+
+            # Parse scores
+            if row.get("confidence_score"):
+                try:
+                    gene_qc.confidence_score = float(row["confidence_score"])
+                except ValueError:
+                    pass
+
+            if row.get("splice_score"):
+                try:
+                    gene_qc.splice_score = float(row["splice_score"])
+                except ValueError:
+                    pass
+
+            if row.get("homology_score"):
+                try:
+                    gene_qc.homology_score = float(row["homology_score"])
+                except ValueError:
+                    pass
+
+            # Parse flags
+            flag_codes = row.get("flag_codes", "")
+            if flag_codes:
+                for code in flag_codes.split(","):
+                    code = code.strip()
+                    flag = Flags.get_by_code(code)
+                    if flag:
+                        gene_qc.add_flag(flag)
+
+            gene_qcs[gene_id] = gene_qc
+
+    return gene_qcs
 
 
 # =============================================================================
