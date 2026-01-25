@@ -1,0 +1,127 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "helixforge"
+version = "0.1.0-alpha"
+description = "A modular toolkit for refining Helixer gene predictions into publication-quality annotations"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Arun Seetharam"}
+]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+keywords = ["bioinformatics", "genomics", "gene-prediction", "annotation", "helixer"]
+
+dependencies = [
+    "h5py>=3.8",
+    "pysam>=0.21",
+    "pyfaidx>=0.7",
+    "gffutils>=0.12",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "plotly>=5.14",
+    "jinja2>=3.1",
+    "click>=8.1",
+    "rich>=13.0",
+    "attrs>=23.0",
+]
+
+[project.optional-dependencies]
+interactive = [
+    "dash>=2.10",
+    "panel>=1.0",
+]
+dev = [
+    "pytest>=7.3",
+    "pytest-cov",
+    "pre-commit",
+    "ruff",
+    "mypy",
+    "memory-profiler",
+]
+docs = [
+    "mkdocs-material",
+    "mkdocstrings[python]",
+]
+
+[project.scripts]
+helixforge = "helixforge.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/aseetharam/helixforge"
+Documentation = "https://github.com/aseetharam/helixforge#readme"
+Repository = "https://github.com/aseetharam/helixforge"
+Issues = "https://github.com/aseetharam/helixforge/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+    "B905",   # zip without explicit strict parameter
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["helixforge"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["src/helixforge"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
