@@ -1,0 +1,131 @@
+#!/bin/bash
+# HelixForge Confidence Scoring SLURM Job Template
+#
+# This template generates a complete SLURM array job for confidence scoring.
+# Each array task processes one genomic chunk, computing confidence scores
+# for gene predictions based on Helixer HDF5 probability predictions.
+#
+# Required inputs:
+#   - Helixer HDF5 predictions
+#   - Helixer GFF3 predictions
+#   - Genome FASTA file
+#   - Chunk plan JSON file
+#
+# Outputs per chunk:
+#   - Confidence scores TSV
+#   - Completion marker (.done file)
+#
+# Usage:
+#   1. Generate with: helixforge parallel slurm --workflow confidence ...
+#   2. Submit with: sbatch submit.sh
+#   3. After completion: bash aggregate.sh
+
+#SBATCH --job-name={{ job_name | default('hf_confidence') }}
+#SBATCH --partition={{ partition | default('normal') }}
+#SBATCH --time={{ time | default('2:00:00') }}
+#SBATCH --mem={{ memory_gb | default(16) }}G
+#SBATCH --cpus-per-task={{ cpus_per_task | default(1) }}
+#SBATCH --array=0-{{ n_chunks - 1 }}{% if max_concurrent %}%{{ max_concurrent }}{% endif %}
+
+#SBATCH --output=logs/%x_%A_%a.out
+#SBATCH --error=logs/%x_%A_%a.err
+{% if account %}
+#SBATCH --account={{ account }}
+{% endif %}
+{% if email %}
+#SBATCH --mail-user={{ email }}
+#SBATCH --mail-type={{ mail_type | default('FAIL') }}
+{% endif %}
+
+set -euo pipefail
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+HELIXER_H5="{{ helixer_h5 }}"
+HELIXER_GFF="{{ helixer_gff }}"
+GENOME_FASTA="{{ genome_fasta }}"
+CHUNK_PLAN="{{ chunk_plan }}"
+OUTPUT_DIR="{{ output_dir }}"
+
+# Confidence scoring parameters
+HIGH_THRESHOLD={{ high_threshold | default(0.8) }}
+MEDIUM_THRESHOLD={{ medium_threshold | default(0.5) }}
+
+# ============================================================================
+# Environment Setup
+# ============================================================================
+
+echo "=========================================="
+echo "HelixForge Confidence Scoring"
+echo "Job ID: ${SLURM_JOB_ID}"
+echo "Task ID: ${SLURM_ARRAY_TASK_ID}"
+echo "Node: ${SLURM_NODELIST}"
+echo "Start time: $(date)"
+echo "=========================================="
+
+{% for module in modules | default([]) %}
+module load {{ module }}
+{% endfor %}
+
+{% if conda_env %}
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate {{ conda_env }}
+{% endif %}
+
+mkdir -p "${OUTPUT_DIR}"
+mkdir -p logs
+
+# ============================================================================
+# Extract Chunk Information
+# ============================================================================
+
+TASK_ID=${SLURM_ARRAY_TASK_ID}
+
+CHUNK_JSON=$(python3 -c "
+import json
+with open('${CHUNK_PLAN}') as f:
+    plan = json.load(f)
+print(json.dumps(plan['chunks'][${TASK_ID}]))
+")
+
+CHUNK_ID=$(echo "$CHUNK_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['chunk_id'])")
+SEQID=$(echo "$CHUNK_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['seqid'])")
+START=$(echo "$CHUNK_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['start'])")
+END=$(echo "$CHUNK_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['end'])")
+
+echo "Processing chunk: ${CHUNK_ID}"
+echo "  Region: ${SEQID}:${START}-${END}"
+
+# ============================================================================
+# Run Confidence Scoring
+# ============================================================================
+
+echo ""
+echo "Running helixforge confidence..."
+
+helixforge confidence \
+    --predictions "${HELIXER_H5}" \
+    --gff "${HELIXER_GFF}" \
+    --genome "${GENOME_FASTA}" \
+    --region "${SEQID}:${START}-${END}" \
+    --output "${OUTPUT_DIR}/${CHUNK_ID}.tsv" \
+    --high-threshold ${HIGH_THRESHOLD} \
+    --medium-threshold ${MEDIUM_THRESHOLD} \
+{% if verbose %}
+    --verbose \
+{% endif %}
+    2>&1 | tee "${OUTPUT_DIR}/${CHUNK_ID}.log"
+
+# ============================================================================
+# Mark Completion
+# ============================================================================
+
+touch "${OUTPUT_DIR}/${CHUNK_ID}.done"
+
+echo ""
+echo "=========================================="
+echo "Chunk ${CHUNK_ID} complete"
+echo "End time: $(date)"
+echo "=========================================="

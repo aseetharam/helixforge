@@ -135,25 +135,154 @@ helixforge splice \
 ---
 
 ## Phase 4: Parallel Execution
-Status: [ ] Not started
+Status: [x] Complete (Revised)
 
 Deliverables:
-- [ ] parallel/chunker.py - Genome partitioning strategies
-- [ ] parallel/executor.py - Multiprocessing wrapper
-- [ ] parallel/slurm.py - SLURM array job generator
-- [ ] Scaling tests on multi-core systems
+- [x] parallel/chunker.py - Genome partitioning strategies
+- [x] parallel/executor.py - Multiprocessing wrapper with memory monitoring
+- [x] parallel/taskgen.py - Task file generation for HyperShell/GNU Parallel
+- [x] parallel/slurm.py - Minimal SLURM utilities (environment detection, example scripts)
+- [x] templates/chunk_wrapper.sh - Generic wrapper script template
+- [x] CLI parallel subcommand with plan, tasks, aggregate, example-sbatch, suggest
+- [x] tests/test_parallel_*.py - Comprehensive test suite
+- [x] docs/parallel.md - Documentation
+- [x] **Chunk-aware flags in core commands (--region, --chunk-id, --scaffold)**
+- [x] utils/regions.py - Region parsing and validation utilities
+- [x] tests/test_utils_regions.py - Region parsing tests
+- [x] tests/test_cli_chunk_aware.py - Chunk-aware CLI tests
+
+Data structures implemented:
+- ChunkStrategy enum (BY_SCAFFOLD, BY_SIZE, BY_GENES, ADAPTIVE)
+- GenomicChunk attrs class with overlap/containment methods
+- ChunkPlan attrs class with JSON serialization
+- GenomeChunker class with strategy-specific partitioning
+- ExecutorBackend enum (SERIAL, THREADS, PROCESSES)
+- MemoryStats, TaskResult, ExecutionStats attrs classes
+- MemoryMonitor class for background memory tracking
+- ParallelExecutor class with multi-backend support
+- ChunkProcessor high-level processing interface
+- TaskFile attrs class for task file metadata
+- TaskGenerator class for HyperShell/GNU Parallel task files
+
+Chunking strategies:
+- BY_SCAFFOLD: One chunk per scaffold, with optional max size splitting
+- BY_SIZE: Fixed base-pair windows with scaffold boundary handling
+- BY_GENES: Fixed gene count per chunk, respects scaffold boundaries
+- ADAPTIVE: Automatic balancing based on gene density and target chunk count
+
+Execution features:
+- Serial, threaded, and process-based backends
+- Progress callback support
+- Error handling with continue_on_error option
+- Memory monitoring with thresholds and logging
+- Optimal worker count calculation
+
+HPC parallelization approach:
+- Task file generation (one command per line) for scheduler-agnostic execution
+- Works with HyperShell, GNU Parallel, xargs, or custom scripts
+- Wrapper script generation for complex multi-command workflows
+- Minimal SLURM utilities for users who need direct SLURM integration
+- Example SBATCH scripts for HyperShell and GNU Parallel
+
+CLI usage:
+```
+# Create chunking plan
+helixforge parallel plan --genome genome.fa --strategy scaffold -o chunks.json
+
+# Generate task file
+helixforge parallel tasks --chunk-plan chunks.json \
+    --command 'helixforge confidence --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o {output_dir}/{chunk_id}.tsv' \
+    --output tasks.txt --output-dir outputs/
+
+# Execute with HyperShell (recommended)
+hs launch --parallelism 32 < tasks.txt
+
+# Or execute with GNU Parallel
+parallel -j 32 < tasks.txt
+
+# Aggregate results
+helixforge parallel aggregate --input-dir outputs/ --pattern '*.tsv' -o combined.tsv --type merge_tsv
+
+# Get example SLURM script
+helixforge parallel example-sbatch -o run.sbatch --executor hypershell
+
+# Get parameter suggestions
+helixforge parallel suggest --genome genome.fa --memory 64 --workers 16
+```
+
+Design rationale:
+- SLURM configurations vary significantly across HPC sites
+- HyperShell provides scheduler-agnostic parallelization (SLURM, PBS, SGE, LSF)
+- Task files are simple, inspectable, and portable
+- Users configure HyperShell once; HelixForge generates task files
+
+Chunk-aware command notes:
+- Commands (`confidence`, `splice`) accept --region, --chunk-id, --scaffold flags
+- Region format: seqid:start-end (1-based inclusive, e.g., chr1:1000-2000)
+- Internal coordinates: 0-based half-open (Python convention)
+- Task template {start}/{end}: 1-based for CLI commands
+- Task template {start_0}/{end_0}: 0-based for internal use
+- parse_region() converts CLI input to internal coords
+- format_command() converts internal coords back to CLI format
 
 ---
 
 ## Phase 5: Homology Pipeline
-Status: [ ] Not started
+Status: [x] Complete
 
 Deliverables:
-- [ ] homology/search.py - Diamond/MMseqs2 wrapper
-- [ ] homology/validate.py - Coverage and identity scoring
-- [ ] homology/domains.py - InterProScan integration (optional)
-- [ ] TE overlap detection
-- [ ] Unit tests
+- [x] homology/search.py - Diamond/MMseqs2 wrapper
+- [x] homology/validate.py - Coverage and identity scoring
+- [x] homology/databases.py - Database download and management
+- [x] TE overlap detection
+- [x] Chimera detection (fused genes)
+- [x] Fragment detection (split genes)
+- [x] CLI homology subcommand group
+- [x] Unit tests (tests/test_homology.py)
+- [ ] homology/domains.py - InterProScan integration (optional, deferred)
+
+Data structures implemented:
+- SearchTool enum (DIAMOND, MMSEQS2)
+- HomologyHit attrs class with coverage calculations
+- GeneHomology attrs class for aggregated results
+- HomologyStatus enum (COMPLETE, PARTIAL, NO_HIT, TE_OVERLAP, CHIMERIC, FRAGMENTED)
+- ValidationThresholds class with presets (default, strict, relaxed)
+- ValidationResult attrs class with detailed metrics
+- ChimericEvidence NamedTuple for fusion detection
+- FragmentGroup attrs class for split gene detection
+- TEInterval attrs class for TE overlap
+- DatabaseInfo dataclass for database management
+- DatabaseType enum for supported databases
+
+Implementation notes:
+- HomologySearch class supports Diamond and MMseqs2 with format_database(), search(), parse_results()
+- HomologyValidator detects chimeras (non-overlapping hits to different proteins) and fragments
+- Fragment detection identifies multiple genes hitting same subject in non-overlapping regions
+- TE overlap calculated from BED file annotations
+- Protein extraction and translation from GFF3/genome
+- Database download utilities for Swiss-Prot and UniRef
+
+CLI usage:
+```
+# Extract proteins from gene models
+helixforge homology extract-proteins -g genes.gff3 --genome genome.fa -o proteins.fa
+
+# Format database for Diamond
+helixforge homology format-db -i swissprot.fa -o swissprot
+
+# Download Swiss-Prot plant proteins
+helixforge homology download-db --database swissprot_plants
+
+# Run homology search
+helixforge homology search -q proteins.fa -d swissprot.dmnd -o hits.tsv
+
+# Validate genes using homology
+helixforge homology validate -g genes.gff3 -s hits.tsv -o validation.tsv \
+    --te-bed te.bed --chimera-report chimeras.tsv --fragment-report fragments.tsv
+
+# List available databases
+helixforge homology list-databases
+```
 
 ---
 

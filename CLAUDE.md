@@ -89,8 +89,9 @@ HelixForge is a modular toolkit designed to transform Helixer's raw gene predict
 
 #### `parallel/` - Parallelization
 - **chunker.py**: Divide genome into processable chunks
-- **executor.py**: Local multiprocessing execution
-- **slurm.py**: SLURM cluster job submission
+- **executor.py**: Local multiprocessing execution with memory monitoring
+- **taskgen.py**: Task file generation for HyperShell/GNU Parallel
+- **slurm.py**: Minimal SLURM utilities (environment detection, example scripts)
 
 #### `utils/` - Utilities
 - **intervals.py**: Genomic interval operations (overlap, merge, subtract)

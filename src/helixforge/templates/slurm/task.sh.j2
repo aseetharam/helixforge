@@ -1,0 +1,121 @@
+#!/bin/bash
+# HelixForge Task Script
+# Processes a single chunk from the chunk plan.
+#
+# Usage:
+#   bash task.sh <TASK_ID>
+#
+# This script is called by submit.sh for each array task.
+
+set -euo pipefail
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+TASK_ID="${1:-$SLURM_ARRAY_TASK_ID}"
+CHUNK_PLAN="{{ chunk_plan_path }}"
+WORK_DIR="{{ work_dir }}"
+OUTPUT_DIR="{{ output_dir }}"
+
+# Validate task ID
+if [ -z "$TASK_ID" ]; then
+    echo "ERROR: Task ID not provided"
+    exit 1
+fi
+
+# ============================================================================
+# Extract Chunk Information
+# ============================================================================
+
+echo "Loading chunk plan from: ${CHUNK_PLAN}"
+
+# Get chunk info for this task using Python
+CHUNK_JSON=$(python3 -c "
+import json
+import sys
+
+with open('${CHUNK_PLAN}') as f:
+    plan = json.load(f)
+
+task_id = int('${TASK_ID}')
+if task_id >= len(plan['chunks']):
+    print(f'ERROR: Task ID {task_id} exceeds chunk count {len(plan[\"chunks\"])}', file=sys.stderr)
+    sys.exit(1)
+
+chunk = plan['chunks'][task_id]
+print(json.dumps(chunk))
+")
+
+# Parse chunk fields
+CHUNK_ID=$(echo "$CHUNK_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['chunk_id'])")
+SEQID=$(echo "$CHUNK_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['seqid'])")
+START=$(echo "$CHUNK_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['start'])")
+END=$(echo "$CHUNK_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['end'])")
+
+# Check for gene IDs if available
+GENE_IDS=$(echo "$CHUNK_JSON" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+if 'gene_ids' in data and data['gene_ids']:
+    print(','.join(data['gene_ids']))
+else:
+    print('')
+" 2>/dev/null || echo "")
+
+# ============================================================================
+# Export Variables for Command Template
+# ============================================================================
+
+export CHUNK_ID="${CHUNK_ID}"
+export CHUNK_SEQID="${SEQID}"
+export CHUNK_START="${START}"
+export CHUNK_END="${END}"
+export CHUNK_GENE_IDS="${GENE_IDS}"
+export CHUNK_PLAN="${CHUNK_PLAN}"
+export CHUNK_INDEX="${TASK_ID}"
+export WORK_DIR="${WORK_DIR}"
+export OUTPUT_DIR="${OUTPUT_DIR}"
+
+# Create output directory if needed
+mkdir -p "${OUTPUT_DIR}"
+
+echo "=========================================="
+echo "Processing chunk: ${CHUNK_ID}"
+echo "  Scaffold: ${SEQID}"
+echo "  Region: ${START}-${END}"
+echo "  Size: $((END - START)) bp"
+{% if has_gene_ids %}
+echo "  Genes: $(echo ${GENE_IDS} | tr ',' '\n' | wc -w)"
+{% endif %}
+echo "  Task ID: ${TASK_ID}"
+echo "  Start time: $(date)"
+echo "=========================================="
+
+# ============================================================================
+# Run HelixForge Command
+# ============================================================================
+
+{% if timing %}
+START_TIME=$(date +%s.%N)
+{% endif %}
+
+# Execute the main command
+{{ command_template }}
+
+{% if timing %}
+END_TIME=$(date +%s.%N)
+DURATION=$(echo "$END_TIME - $START_TIME" | bc)
+echo "Processing time: ${DURATION} seconds"
+{% endif %}
+
+# ============================================================================
+# Mark Completion
+# ============================================================================
+
+touch "${OUTPUT_DIR}/${CHUNK_ID}.done"
+
+echo "=========================================="
+echo "Chunk ${CHUNK_ID} complete"
+echo "End time: $(date)"
+echo "=========================================="
