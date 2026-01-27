@@ -147,3 +147,4 @@ logs/
 *.sqlite
 *.sqlite3
 CLAUDE.md
+helixer_output/
