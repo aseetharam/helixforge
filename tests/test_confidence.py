@@ -230,7 +230,7 @@ class TestConfidenceCalculator:
         reader.scaffold_lengths = {"chr1": 1000, "chr2": 500}
 
         # Create mock predictions (high confidence)
-        def mock_predictions(seqid, start, end):
+        def mock_predictions(seqid, start, end, strand="+"):
             length = end - start
             # Create softmax-like probabilities
             np.random.seed(42)
@@ -582,7 +582,7 @@ class TestEdgeCases:
         reader.scaffold_names = ["chr1"]
         reader.scaffold_lengths = {"chr1": 1000}
 
-        def mock_predictions(seqid, start, end):
+        def mock_predictions(seqid, start, end, strand="+"):
             length = end - start
             np.random.seed(42)
             raw = np.random.random((length, 4)).astype(np.float32)

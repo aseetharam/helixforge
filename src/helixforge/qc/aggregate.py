@@ -341,6 +341,7 @@ class QCAggregator:
 
     def aggregate_from_files(
         self,
+        refine_tsv: Path | str | None = None,
         confidence_tsv: Path | str | None = None,
         splice_tsv: Path | str | None = None,
         homology_tsv: Path | str | None = None,
@@ -348,20 +349,34 @@ class QCAggregator:
         """Aggregate results from TSV files.
 
         Args:
+            refine_tsv: Path to refine report TSV (contains confidence, splice, evidence).
             confidence_tsv: Path to confidence scores TSV.
-            splice_tsv: Path to splice report TSV.
+            splice_tsv: Path to splice report TSV (deprecated).
             homology_tsv: Path to homology validation TSV.
 
         Returns:
             Dict mapping gene_id to GeneQC objects.
+
+        Note:
+            If refine_tsv is provided, it takes precedence over confidence_tsv
+            and splice_tsv for those metrics, as refine output contains both.
         """
         confidence_results = None
         splice_results = None
         homology_results = None
 
+        # Load refine TSV - contains confidence, splice, and evidence data
+        if refine_tsv:
+            refine_results = self._load_tsv(Path(refine_tsv))
+            # Use refine results for both confidence and splice
+            confidence_results = refine_results
+            splice_results = refine_results
+
+        # Confidence TSV overrides if specified separately
         if confidence_tsv:
             confidence_results = self._load_tsv(Path(confidence_tsv))
 
+        # Splice TSV overrides if specified separately
         if splice_tsv:
             splice_results = self._load_tsv(Path(splice_tsv))
 

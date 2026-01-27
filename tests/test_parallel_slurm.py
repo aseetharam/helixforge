@@ -254,7 +254,7 @@ class TestWriteExampleSbatch:
         content = output_path.read_text()
         assert "#!/bin/bash" in content
         assert "#SBATCH" in content
-        assert "hs launch" in content
+        assert "hs cluster" in content
         assert "SLURM_CPUS_PER_TASK" in content
 
     def test_write_parallel_script(self, tmp_path):
@@ -291,7 +291,7 @@ class TestExampleSbatchTemplates:
         """Test HyperShell template has expected content."""
         assert "#!/bin/bash" in EXAMPLE_SBATCH_HYPERSHELL
         assert "#SBATCH --job-name=helixforge" in EXAMPLE_SBATCH_HYPERSHELL
-        assert "hs launch" in EXAMPLE_SBATCH_HYPERSHELL
+        assert "hs cluster" in EXAMPLE_SBATCH_HYPERSHELL
         assert "tasks.txt" in EXAMPLE_SBATCH_HYPERSHELL
 
     def test_parallel_template_content(self):

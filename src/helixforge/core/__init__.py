@@ -6,30 +6,31 @@ for refining gene predictions:
 - Confidence scoring
 - Splice site analysis
 - Gene boundary refinement
+- RNA-seq evidence scoring
 - Merge/split detection
 
 Example:
-    >>> from helixforge.core import calculate_confidence
-    >>> from helixforge.core.models import GeneModel
+    >>> from helixforge.core.evidence import EvidenceScorer, EvidenceScorerConfig
+    >>> from helixforge.core.splice import SpliceRefiner
 """
 
-# TODO: Import and expose main classes once implemented
-# from helixforge.core.models import (
-#     GeneModel,
-#     Transcript,
-#     Exon,
-#     GenomicRegion,
-#     ConfidenceScore,
-# )
-# from helixforge.core.confidence import calculate_confidence
-# from helixforge.core.splice import validate_splice_sites
-# from helixforge.core.boundaries import refine_boundaries
+from helixforge.core.evidence import (
+    EvidenceLevel,
+    EvidenceScore,
+    EvidenceScorer,
+    EvidenceScorerConfig,
+    ExonEvidence,
+    JunctionEvidence,
+    summarize_evidence_scores,
+)
 
 __all__: list[str] = [
-    # "GeneModel",
-    # "Transcript",
-    # "Exon",
-    # "GenomicRegion",
-    # "ConfidenceScore",
-    # "calculate_confidence",
+    # Evidence scoring
+    "EvidenceLevel",
+    "EvidenceScore",
+    "EvidenceScorer",
+    "EvidenceScorerConfig",
+    "ExonEvidence",
+    "JunctionEvidence",
+    "summarize_evidence_scores",
 ]

@@ -120,16 +120,22 @@ Implementation notes:
 
 CLI usage:
 ```
+# NOTE: Use `helixforge refine` for the consolidated pipeline
+helixforge refine \
+    -p predictions.h5 \
+    -g predictions.gff3 \
+    --genome genome.fa \
+    --rnaseq-bam rnaseq.bam \
+    -o refined.gff3 \
+    -r refine_report.tsv
+
+# Standalone splice command (DEPRECATED - use refine instead)
 helixforge splice \
     --helixer-gff predictions.gff3 \
     --genome genome.fa \
     --rnaseq-bam rnaseq.bam \
     --output-gff refined.gff3 \
-    --report splice_report.tsv \
-    --max-shift 15 \
-    --min-reads 3 \
-    --adjust-boundaries \
-    --workers 4
+    --report splice_report.tsv
 ```
 
 ---
@@ -189,13 +195,13 @@ CLI usage:
 # Create chunking plan
 helixforge parallel plan --genome genome.fa --strategy scaffold -o chunks.json
 
-# Generate task file
+# Generate task file (include all required options for the command)
 helixforge parallel tasks --chunk-plan chunks.json \
-    --command 'helixforge confidence --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o {output_dir}/{chunk_id}.tsv' \
+    --command 'helixforge confidence -p predictions.h5 -g predictions.gff3 --genome genome.fa --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o {output_dir}/{chunk_id}.tsv' \
     --output tasks.txt --output-dir outputs/
 
 # Execute with HyperShell (recommended)
-hs launch --parallelism 32 < tasks.txt
+hs cluster tasks.txt --num-tasks 32
 
 # Or execute with GNU Parallel
 parallel -j 32 < tasks.txt
@@ -348,13 +354,63 @@ Deliverables:
 ---
 
 ## Phase 8: CLI Integration
-Status: [ ] Not started
+Status: [x] Complete
 
 Deliverables:
-- [ ] Full subcommand implementation
-- [ ] Config file support (YAML)
-- [ ] Progress bars and logging
-- [ ] Shell completion
+- [x] Full subcommand implementation
+- [x] Command consolidation (refine as main pipeline)
+- [x] Evidence scoring standalone command
+- [x] Deprecated splice command (use refine instead)
+- [ ] Config file support (YAML) - deferred
+- [x] Progress bars and logging
+- [ ] Shell completion - deferred
+
+### Command Consolidation (v0.1.1)
+
+The CLI has been refactored to simplify the workflow:
+
+**New `refine` command** (main pipeline):
+- Combines splice correction, boundary adjustment, confidence scoring, and evidence scoring
+- Requires Helixer HDF5 + RNA-seq evidence
+- Outputs refined GFF3 with all quality attributes
+- Replaces the need for separate confidence/splice/evidence commands
+
+**Renamed `evidence` command** (standalone scoring):
+- Renamed from `add-evidence`
+- Performs evidence scoring only (no refinement)
+- Does not require HDF5 file
+- Use when RNA-seq data is available but HDF5 is not
+
+**Deprecated `splice` command**:
+- Prints deprecation warning when used
+- Functionality moved into `refine` command
+- Kept for backwards compatibility
+
+**Updated `qc aggregate`**:
+- Added `--refine-tsv` option for refine report input
+- Accepts consolidated report instead of separate module outputs
+
+CLI usage:
+```
+# Main workflow (recommended)
+helixforge refine -p helixer.h5 -g helixer.gff3 --genome genome.fa \
+    --rnaseq-bam rnaseq.bam -o refined.gff3 -r refine_report.tsv
+
+# Standalone evidence scoring (no HDF5)
+helixforge evidence -g predictions.gff3 -b rnaseq.bam -o annotated.gff3
+
+# QC aggregation
+helixforge qc aggregate --refine-tsv refine_report.tsv \
+    --homology-tsv validation.tsv -o qc_results.tsv
+```
+
+Files added/modified:
+- core/refine.py - RefinePipeline, RefineConfig, RefinedGene
+- cli.py - Updated refine, evidence commands; deprecated splice
+- qc/aggregate.py - Added refine_tsv support
+- docs/refine.md - New documentation
+- docs/workflow.md - Updated workflow
+- CLAUDE.md - Updated commands reference
 
 ---
 

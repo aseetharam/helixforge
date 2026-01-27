@@ -432,22 +432,22 @@ class TestGenerateHypershellCommand:
         task_file = tmp_path / "tasks.txt"
         cmd = generate_hypershell_command(task_file)
 
-        assert "hs launch" in cmd
-        assert f"< {task_file}" in cmd
+        assert "hs cluster" in cmd
+        assert str(task_file) in cmd
 
     def test_with_parallelism(self, tmp_path):
         """Test with parallelism option."""
         task_file = tmp_path / "tasks.txt"
         cmd = generate_hypershell_command(task_file, parallelism=16)
 
-        assert "--parallelism 16" in cmd
+        assert "--num-tasks 16" in cmd
 
     def test_with_timeout(self, tmp_path):
         """Test with timeout option."""
         task_file = tmp_path / "tasks.txt"
-        cmd = generate_hypershell_command(task_file, timeout="2h")
+        cmd = generate_hypershell_command(task_file, timeout=7200)
 
-        assert "--timeout 2h" in cmd
+        assert "--task-timeout 7200" in cmd
 
     def test_with_all_options(self, tmp_path):
         """Test with all options."""
@@ -455,10 +455,10 @@ class TestGenerateHypershellCommand:
         cmd = generate_hypershell_command(
             task_file,
             parallelism=32,
-            timeout="1h",
+            timeout=3600,
         )
 
-        assert "hs launch" in cmd
-        assert "--parallelism 32" in cmd
-        assert "--timeout 1h" in cmd
-        assert f"< {task_file}" in cmd
+        assert "hs cluster" in cmd
+        assert "--num-tasks 32" in cmd
+        assert "--task-timeout 3600" in cmd
+        assert str(task_file) in cmd

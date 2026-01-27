@@ -74,7 +74,7 @@ helixforge qc \
 
 Full documentation is available at [docs/](docs/) (coming soon).
 
-For development guidelines, see [CLAUDE.md](CLAUDE.md).
+For development guidelines, see [GUIDE.md](GUIDE.md).
 
 ## Contributing
 

@@ -302,9 +302,9 @@ class ConfidenceCalculator:
         Returns:
             GeneConfidence with all calculated metrics.
         """
-        # 1. Extract predictions for gene region
+        # 1. Extract predictions for gene region (strand-aware if available)
         preds = self.hdf5_reader.get_predictions_for_region(
-            gene.seqid, gene.start, gene.end
+            gene.seqid, gene.start, gene.end, strand=gene.strand
         )
 
         # 2. Calculate per-base metrics
@@ -481,6 +481,7 @@ class ConfidenceCalculator:
         seqid: str,
         start: int,
         end: int,
+        strand: str = "+",
     ) -> RegionConfidence:
         """Get per-base confidence for a region (for visualization).
 
@@ -488,11 +489,12 @@ class ConfidenceCalculator:
             seqid: Scaffold name.
             start: Start position (0-based).
             end: End position (0-based, exclusive).
+            strand: Strand ("+" or "-") for strand-aware prediction retrieval.
 
         Returns:
             RegionConfidence with per-base metrics.
         """
-        preds = self.hdf5_reader.get_predictions_for_region(seqid, start, end)
+        preds = self.hdf5_reader.get_predictions_for_region(seqid, start, end, strand=strand)
 
         per_base_entropy = self._calculate_entropy(preds)
         per_base_max_prob = np.max(preds, axis=1)

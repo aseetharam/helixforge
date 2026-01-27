@@ -18,10 +18,10 @@ Example:
     >>> plan = chunker.create_plan(ChunkStrategy.BY_SCAFFOLD)
     >>> gen = TaskGenerator(plan)
     >>> task_file = gen.generate(
-    ...     command_template="helixforge confidence --chunk-id {chunk_id} -o out/{chunk_id}.tsv",
+    ...     command_template="helixforge confidence -p predictions.h5 -g genes.gff3 --genome genome.fa --chunk-id {chunk_id} -o out/{chunk_id}.tsv",
     ...     output_path="tasks.txt",
     ... )
-    >>> # Execute with: hs launch --parallelism 32 < tasks.txt
+    >>> # Execute with: hs cluster tasks.txt --num-tasks 32
 """
 
 from helixforge.parallel.chunker import (

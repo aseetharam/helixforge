@@ -14,13 +14,13 @@ Example:
     >>> plan = ChunkPlan.load("chunks.json")
     >>> gen = TaskGenerator(plan)
     >>> task_file = gen.generate(
-    ...     command_template="helixforge confidence --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o out/{chunk_id}.tsv",
+    ...     command_template="helixforge confidence -p predictions.h5 -g genes.gff3 --genome genome.fa --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o out/{chunk_id}.tsv",
     ...     output_path="tasks.txt",
     ... )
     >>> print(f"Generated {task_file.n_tasks} tasks")
 
     # Execute with HyperShell:
-    # hs launch --parallelism 32 < tasks.txt
+    # hs cluster tasks.txt --num-tasks 32
 """
 
 from __future__ import annotations
@@ -196,7 +196,7 @@ class TaskGenerator:
         ...     command_template="echo {chunk_id}: {seqid}:{start}-{end}",
         ...     output_path="tasks.txt",
         ... )
-        >>> # Execute with: hs launch --parallelism 32 < tasks.txt
+        >>> # Execute with: hs cluster tasks.txt --num-tasks 32
     """
 
     def __init__(self, chunk_plan: ChunkPlan) -> None:
@@ -529,26 +529,24 @@ def estimate_parallelism(
 def generate_hypershell_command(
     task_file: Path | str,
     parallelism: int | None = None,
-    timeout: str | None = None,
+    timeout: int | None = None,
 ) -> str:
-    """Generate HyperShell launch command.
+    """Generate HyperShell cluster command.
 
     Args:
         task_file: Path to task file.
         parallelism: Number of parallel workers (default: auto).
-        timeout: Task timeout (e.g., "1h", "30m").
+        timeout: Task timeout in seconds.
 
     Returns:
         HyperShell command string.
     """
-    cmd = f"hs launch"
+    cmd = f"hs cluster {task_file}"
 
     if parallelism:
-        cmd += f" --parallelism {parallelism}"
+        cmd += f" --num-tasks {parallelism}"
 
     if timeout:
-        cmd += f" --timeout {timeout}"
-
-    cmd += f" < {task_file}"
+        cmd += f" --task-timeout {timeout}"
 
     return cmd

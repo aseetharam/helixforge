@@ -63,16 +63,135 @@ helixforge splice \
     --report splice_report.tsv
 ```
 
-### With Pre-computed Junctions
+### With Multiple Tissues/Samples
 
-If you have junctions from multiple samples, provide them as a BED file:
+When RNA-seq data from multiple tissues or developmental stages is available, provide BAM files to improve splice junction confidence and enable tissue-aware filtering.
+
+**Multiple input formats are supported:**
 
 ```bash
+# Comma-separated list
 helixforge splice \
     --helixer-gff predictions.gff3 \
     --genome genome.fa \
-    --junctions-bed all_junctions.bed \
+    --rnaseq-bam liver.bam,brain.bam,heart.bam,root.bam \
+    --min-tissues 2 \
+    --min-reads 3 \
     --output-gff refined.gff3
+
+# Repeated flag (equivalent)
+helixforge splice \
+    --helixer-gff predictions.gff3 \
+    --genome genome.fa \
+    --rnaseq-bam liver.bam \
+    --rnaseq-bam brain.bam \
+    --rnaseq-bam heart.bam \
+    --min-tissues 2 \
+    --output-gff refined.gff3
+
+# From a file list (one path per line)
+helixforge splice \
+    --helixer-gff predictions.gff3 \
+    --genome genome.fa \
+    --rnaseq-bam-list bam_files.txt \
+    --min-tissues 2 \
+    --output-gff refined.gff3
+
+# Mixed (all can be combined)
+helixforge splice \
+    --rnaseq-bam liver.bam,brain.bam \
+    --rnaseq-bam heart.bam \
+    --rnaseq-bam-list additional_bams.txt \
+    ...
+```
+
+**Benefits of multi-BAM mode:**
+- **Tissue-specific junction evidence**: Track which tissues support each splice junction
+- **Weighted confidence**: Junctions supported by multiple tissues are more reliable
+- **Avoids dilution**: Rare tissue-specific isoforms aren't drowned out by high-expression tissues
+- **Flexible thresholds**: Apply `--min-reads` per-sample when `--min-tissues` > 1
+
+**How thresholds work in multi-BAM mode:**
+- When `--min-tissues 1` (default): Junctions are aggregated and `--min-reads` applies to the total count across all samples
+- When `--min-tissues > 1`: `--min-reads` applies per-sample; a junction must have >= `--min-reads` in at least `--min-tissues` samples
+
+### With Pre-computed Junctions
+
+HelixForge supports junction files in BED format or STAR's `SJ.out.tab` format. The format is auto-detected.
+
+```bash
+# Single junction file (BED or STAR SJ.out.tab)
+helixforge splice \
+    --helixer-gff predictions.gff3 \
+    --genome genome.fa \
+    --junctions-bed junctions.bed \
+    --output-gff refined.gff3
+
+# Multiple junction files (comma-separated)
+helixforge splice \
+    --helixer-gff predictions.gff3 \
+    --genome genome.fa \
+    --junctions-bed liver_SJ.out.tab,brain_SJ.out.tab,heart_SJ.out.tab \
+    --min-tissues 2 \
+    --output-gff refined.gff3
+
+# From a file list
+helixforge splice \
+    --helixer-gff predictions.gff3 \
+    --genome genome.fa \
+    --junctions-list junction_files.txt \
+    --min-tissues 2 \
+    --output-gff refined.gff3
+```
+
+### Generating Junction Files
+
+**From STAR aligner:**
+
+STAR automatically generates `*_SJ.out.tab` files during alignment. These can be used directly:
+
+```bash
+# STAR alignment (generates SJ.out.tab)
+STAR --genomeDir genome_index \
+    --readFilesIn reads_R1.fq reads_R2.fq \
+    --outFileNamePrefix sample_ \
+    --outSAMtype BAM SortedByCoordinate
+
+# Use the junction file directly
+helixforge splice \
+    --junctions-bed sample_SJ.out.tab \
+    ...
+```
+
+**STAR SJ.out.tab format** (tab-separated, 9 columns):
+1. Chromosome
+2. First base of intron (1-based)
+3. Last base of intron (1-based)
+4. Strand (0=undefined, 1=+, 2=-)
+5. Intron motif (0=non-canonical, 1=GT/AG, 2=CT/AC, 3=GC/AG, 4=CT/GC, 5=AT/AC, 6=GT/AT)
+6. Annotation status (0=unannotated, 1=annotated)
+7. Uniquely mapping reads
+8. Multi-mapping reads
+9. Maximum overhang
+
+**From regtools:**
+
+```bash
+# Extract junctions from BAM
+regtools junctions extract -s 0 -a 8 -m 50 -M 500000 \
+    aligned.bam -o junctions.bed
+```
+
+**From portcullis:**
+
+```bash
+# Full portcullis pipeline
+portcullis full --threads 8 genome.fa aligned.bam -o portcullis_out
+
+# Use the filtered junctions
+helixforge splice \
+    --junctions-bed portcullis_out/portcullis.filtered.pass.junctions.bed \
+    ...
 ```
 
 ### Full Options
@@ -86,9 +205,32 @@ helixforge splice \
     --report splice_report.tsv \
     --max-shift 15 \          # Maximum bp to shift splice site
     --min-reads 3 \           # Minimum junction read support
+    --min-tissues 1 \         # Minimum samples supporting junction
     --adjust-boundaries \     # Also refine start/stop codons
     --workers 4               # Parallel processing threads
 ```
+
+### Option Reference
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--rnaseq-bam` | - | BAM file(s). Comma-separated or repeat flag |
+| `--rnaseq-bam-list` | - | File with BAM paths (one per line) |
+| `--junctions-bed` | - | Junction file(s) in BED or STAR SJ.out.tab format |
+| `--junctions-list` | - | File with junction file paths (one per line) |
+| `--max-shift` | 15 | Maximum bp to shift splice sites |
+| `--min-reads` | 3 | Minimum reads supporting a junction |
+| `--min-tissues` | 1 | Minimum samples supporting a junction |
+| `--adjust-boundaries` | false | Also refine start/stop codons |
+| `--workers` | 1 | Parallel processing threads |
+| `--report` | - | Output splice report TSV |
+| `--corrections-detail` | - | Output detailed corrections TSV |
+| `--unsupported-bed` | - | Output BED of unsupported introns |
+
+**Notes:**
+- When `--min-tissues > 1`, the `--min-reads` threshold applies per-sample rather than to the total count
+- Junction file format (BED vs STAR SJ.out.tab) is auto-detected
+- You can mix BAM and junction file inputs; junctions will be aggregated from all sources
 
 ## PWM Scoring Interpretation
 
@@ -175,6 +317,23 @@ Rely entirely on PWM scoring. Only correct to canonical sites with strong motif 
 ```
 
 Make minimal changes. Only correct obvious errors with strong evidence.
+
+### Multi-tissue Analysis
+
+When you have RNA-seq from multiple tissues/conditions:
+
+```bash
+# High confidence: require support from at least 2 tissues
+--min-tissues 2 --min-reads 3
+
+# Very high confidence: require support from 3+ tissues
+--min-tissues 3 --min-reads 2
+
+# Relaxed: aggregate all samples (default behavior)
+--min-tissues 1 --min-reads 3
+```
+
+**Rationale**: Junctions observed across multiple independent samples are more likely to be real biological splice sites rather than alignment artifacts. Tissue-specific isoforms (supported by only one tissue) are still retained when `--min-tissues 1` is used.
 
 ## Output Files
 

@@ -172,7 +172,7 @@ EXAMPLE_SBATCH_HYPERSHELL = """\
 mkdir -p outputs logs
 
 # Run HyperShell with allocated CPUs
-hs launch --parallelism ${SLURM_CPUS_PER_TASK} < tasks.txt
+hs cluster tasks.txt --num-tasks ${SLURM_CPUS_PER_TASK}
 """
 
 EXAMPLE_SBATCH_PARALLEL = """\

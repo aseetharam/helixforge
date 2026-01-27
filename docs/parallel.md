@@ -20,13 +20,13 @@ The recommended approach for HPC parallelization uses **task files** that work w
 # 1. Create a chunk plan
 helixforge parallel plan --genome genome.fa -o chunks.json
 
-# 2. Generate task file
+# 2. Generate task file (include all required options for your command)
 helixforge parallel tasks --chunk-plan chunks.json \
-    --command 'helixforge confidence --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o outputs/{chunk_id}.tsv' \
+    --command 'helixforge confidence -p predictions.h5 -g predictions.gff3 --genome genome.fa --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o outputs/{chunk_id}.tsv' \
     --output tasks.txt --output-dir outputs/
 
 # 3. Execute with HyperShell (recommended) or GNU Parallel
-hs launch --parallelism 32 < tasks.txt
+hs cluster tasks.txt --num-tasks 32
 # OR
 parallel -j 32 < tasks.txt
 
@@ -87,6 +87,7 @@ helixforge parallel tasks \
 ### Splice Refinement
 
 ```bash
+# Single BAM file
 helixforge parallel tasks \
     --chunk-plan chunks.json \
     --command "helixforge splice \
@@ -97,6 +98,50 @@ helixforge parallel tasks \
         --chunk-id {chunk_id} \
         -o outputs/{chunk_id}_refined.gff3 \
         -r outputs/{chunk_id}_report.tsv" \
+    --output tasks.txt \
+    --output-dir outputs/
+
+# Multiple BAM files (multi-tissue)
+helixforge parallel tasks \
+    --chunk-plan chunks.json \
+    --command "helixforge splice \
+        --helixer-gff predictions.gff3 \
+        --genome genome.fa \
+        --rnaseq-bam liver.bam,brain.bam,heart.bam \
+        --min-tissues 2 \
+        --min-reads 3 \
+        --region {seqid}:{start}-{end} \
+        --chunk-id {chunk_id} \
+        -o outputs/{chunk_id}_refined.gff3 \
+        -r outputs/{chunk_id}_report.tsv" \
+    --output tasks.txt \
+    --output-dir outputs/
+
+# Using a BAM list file
+helixforge parallel tasks \
+    --chunk-plan chunks.json \
+    --command "helixforge splice \
+        --helixer-gff predictions.gff3 \
+        --genome genome.fa \
+        --rnaseq-bam-list tissue_bams.txt \
+        --min-tissues 2 \
+        --region {seqid}:{start}-{end} \
+        --chunk-id {chunk_id} \
+        -o outputs/{chunk_id}_refined.gff3" \
+    --output tasks.txt \
+    --output-dir outputs/
+
+# Using STAR SJ.out.tab junction files
+helixforge parallel tasks \
+    --chunk-plan chunks.json \
+    --command "helixforge splice \
+        --helixer-gff predictions.gff3 \
+        --genome genome.fa \
+        --junctions-bed sample1_SJ.out.tab,sample2_SJ.out.tab,sample3_SJ.out.tab \
+        --min-tissues 2 \
+        --region {seqid}:{start}-{end} \
+        --chunk-id {chunk_id} \
+        -o outputs/{chunk_id}_refined.gff3" \
     --output tasks.txt \
     --output-dir outputs/
 ```
@@ -224,9 +269,9 @@ helixforge parallel plan \
 ### Generate Task File
 
 ```bash
-# Simple task file with direct commands
+# Simple task file with direct commands (include all required options)
 helixforge parallel tasks --chunk-plan chunks.json \
-    --command 'helixforge confidence --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o {output_dir}/{chunk_id}.tsv' \
+    --command 'helixforge confidence -p predictions.h5 -g predictions.gff3 --genome genome.fa --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o {output_dir}/{chunk_id}.tsv' \
     --output tasks.txt --output-dir outputs/
 
 # With wrapper script for complex workflows
@@ -234,7 +279,7 @@ helixforge parallel tasks --chunk-plan chunks.json \
     --wrapper wrapper.sh \
     --wrapper-setup 'module load python/3.10' \
     --wrapper-setup 'conda activate helixforge' \
-    --command 'helixforge splice --region ${SEQID}:${START}-${END} ...' \
+    --command 'helixforge splice --helixer-gff predictions.gff3 --genome genome.fa --rnaseq-bam rnaseq.bam --region ${SEQID}:${START}-${END} -o ${OUTPUT_DIR}/${CHUNK_ID}.gff3' \
     --output tasks.txt
 ```
 
@@ -256,13 +301,13 @@ Note: `{start}` and `{end}` output 1-based coordinates suitable for CLI commands
 
 ```bash
 # Local execution with 32 parallel workers
-hs launch --parallelism 32 < tasks.txt
+hs cluster tasks.txt --num-tasks 32
 
-# With timeout per task
-hs launch --parallelism 32 --timeout 1h < tasks.txt
+# With timeout per task (in seconds)
+hs cluster tasks.txt --num-tasks 32 --task-timeout 3600
 
-# SLURM integration (submit from login node)
-hs submit --parallelism 32 < tasks.txt
+# Submit tasks to database for distributed execution
+hs submit tasks.txt
 ```
 
 ### Execute with GNU Parallel
@@ -343,10 +388,10 @@ genome = GenomeAccessor("genome.fa")
 chunker = GenomeChunker(genome)
 plan = chunker.create_plan(ChunkStrategy.BY_SCAFFOLD)
 
-# Generate task file
+# Generate task file (include all required options in command template)
 gen = TaskGenerator(plan)
 task_file = gen.generate(
-    command_template="helixforge confidence --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o outputs/{chunk_id}.tsv",
+    command_template="helixforge confidence -p predictions.h5 -g predictions.gff3 --genome genome.fa --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o outputs/{chunk_id}.tsv",
     output_path="tasks.txt",
     output_dir="outputs/",
 )
@@ -416,13 +461,13 @@ For complex workflows with multiple commands per chunk:
 ```python
 from helixforge.parallel import TaskGenerator
 
-# Generate wrapper script
+# Generate wrapper script (include all required options)
 TaskGenerator.generate_wrapper_script(
     output_path="wrapper.sh",
     chunk_plan_path="chunks.json",
     commands=[
-        "helixforge confidence --region ${SEQID}:${START}-${END} -o ${OUTPUT_DIR}/${CHUNK_ID}_conf.tsv",
-        "helixforge splice --region ${SEQID}:${START}-${END} -o ${OUTPUT_DIR}/${CHUNK_ID}.gff3",
+        "helixforge confidence -p predictions.h5 -g predictions.gff3 --genome genome.fa --region ${SEQID}:${START}-${END} -o ${OUTPUT_DIR}/${CHUNK_ID}_conf.tsv",
+        "helixforge splice --helixer-gff predictions.gff3 --genome genome.fa --rnaseq-bam liver.bam,brain.bam,heart.bam --min-tissues 2 --region ${SEQID}:${START}-${END} -o ${OUTPUT_DIR}/${CHUNK_ID}.gff3",
     ],
     setup_commands=[
         "module load python/3.10",

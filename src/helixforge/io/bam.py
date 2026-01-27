@@ -624,6 +624,497 @@ def annotate_junction_sequences(
 
 
 # =============================================================================
+# Junction Aggregation for Multiple BAMs
+# =============================================================================
+
+
+class MultiSampleJunction(NamedTuple):
+    """A splice junction with per-sample evidence.
+
+    Attributes:
+        seqid: Chromosome/contig identifier.
+        start: Intron start (0-based, first intronic base).
+        end: Intron end (0-based, exclusive).
+        strand: Strand inferred from splice site or XS tag.
+        total_reads: Total reads across all samples.
+        total_unique: Total unique reads across all samples.
+        sample_reads: Dictionary mapping sample name to read count.
+        sample_unique: Dictionary mapping sample name to unique count.
+        n_samples_supporting: Number of samples with reads >= threshold.
+        is_canonical: Whether junction has canonical splice sites.
+        donor_dinuc: Dinucleotide at donor site (if known).
+        acceptor_dinuc: Dinucleotide at acceptor site (if known).
+    """
+
+    seqid: str
+    start: int
+    end: int
+    strand: str
+    total_reads: int
+    total_unique: int
+    sample_reads: dict[str, int]
+    sample_unique: dict[str, int]
+    n_samples_supporting: int
+    is_canonical: bool | None = None
+    donor_dinuc: str | None = None
+    acceptor_dinuc: str | None = None
+
+    def to_splice_junction(self) -> SpliceJunction:
+        """Convert to standard SpliceJunction (loses per-sample info)."""
+        return SpliceJunction(
+            seqid=self.seqid,
+            start=self.start,
+            end=self.end,
+            strand=self.strand,
+            read_count=self.total_reads,
+            unique_count=self.total_unique,
+            is_canonical=self.is_canonical,
+            donor_dinuc=self.donor_dinuc,
+            acceptor_dinuc=self.acceptor_dinuc,
+        )
+
+
+def aggregate_junctions_multi_sample(
+    bam_paths: list[Path | str],
+    sample_names: list[str] | None = None,
+    min_reads_per_sample: int = 1,
+    min_samples: int = 1,
+    min_mapq: int = 20,
+    min_overhang: int = 8,
+    region: tuple[str, int, int] | None = None,
+) -> dict[str, list[MultiSampleJunction]]:
+    """Extract and aggregate junctions from multiple BAM files.
+
+    This function extracts splice junctions from multiple BAM files and
+    aggregates them by position, tracking per-sample read counts.
+
+    Args:
+        bam_paths: List of paths to indexed BAM files.
+        sample_names: Optional list of sample names (defaults to BAM filenames).
+        min_reads_per_sample: Minimum reads in a sample to count as supporting.
+        min_samples: Minimum number of supporting samples to include junction.
+        min_mapq: Minimum mapping quality for reads.
+        min_overhang: Minimum exonic overhang on each side.
+        region: Optional (seqid, start, end) tuple to restrict extraction.
+
+    Returns:
+        Dictionary mapping seqid to list of MultiSampleJunction objects.
+    """
+    if not bam_paths:
+        return {}
+
+    # Generate sample names if not provided
+    if sample_names is None:
+        sample_names = [Path(p).stem for p in bam_paths]
+
+    if len(sample_names) != len(bam_paths):
+        raise ValueError("Number of sample names must match number of BAM files")
+
+    # Collect junctions from each BAM
+    # Key: (seqid, start, end) -> {strand: {sample: (total, unique)}}
+    junction_data: dict[
+        tuple[str, int, int], dict[str, dict[str, tuple[int, int]]]
+    ] = defaultdict(lambda: defaultdict(dict))
+
+    for bam_path, sample_name in zip(bam_paths, sample_names):
+        logger.info(f"Extracting junctions from {sample_name}: {bam_path}")
+        extractor = JunctionExtractor(
+            bam_path, min_reads=1, min_mapq=min_mapq, min_overhang=min_overhang
+        )
+
+        try:
+            if region:
+                seqid, start, end = region
+                sample_junctions = {seqid: extractor.extract_region(seqid, start, end, min_reads=1)}
+            else:
+                sample_junctions = extractor.extract_all(min_reads=1)
+
+            # Aggregate into junction_data
+            for seqid, junctions in sample_junctions.items():
+                for j in junctions:
+                    key = (seqid, j.start, j.end)
+                    junction_data[key][j.strand][sample_name] = (j.read_count, j.unique_count)
+        finally:
+            extractor.close()
+
+    # Build MultiSampleJunction objects
+    result: dict[str, list[MultiSampleJunction]] = defaultdict(list)
+
+    for (seqid, start, end), strand_data in junction_data.items():
+        # Merge strand information (use most common strand)
+        all_sample_reads: dict[str, int] = {}
+        all_sample_unique: dict[str, int] = {}
+
+        for strand, sample_counts in strand_data.items():
+            for sample, (reads, unique) in sample_counts.items():
+                # If sample appears in multiple strands, sum the counts
+                all_sample_reads[sample] = all_sample_reads.get(sample, 0) + reads
+                all_sample_unique[sample] = all_sample_unique.get(sample, 0) + unique
+
+        # Count supporting samples
+        n_supporting = sum(
+            1 for reads in all_sample_reads.values() if reads >= min_reads_per_sample
+        )
+
+        # Filter by min_samples
+        if n_supporting < min_samples:
+            continue
+
+        # Determine strand (most common)
+        strand_totals = {
+            strand: sum(counts[0] for counts in sample_counts.values())
+            for strand, sample_counts in strand_data.items()
+        }
+        best_strand = max(strand_totals.keys(), key=lambda s: strand_totals[s])
+
+        total_reads = sum(all_sample_reads.values())
+        total_unique = sum(all_sample_unique.values())
+
+        junction = MultiSampleJunction(
+            seqid=seqid,
+            start=start,
+            end=end,
+            strand=best_strand,
+            total_reads=total_reads,
+            total_unique=total_unique,
+            sample_reads=all_sample_reads,
+            sample_unique=all_sample_unique,
+            n_samples_supporting=n_supporting,
+        )
+        result[seqid].append(junction)
+
+    # Sort by position
+    for seqid in result:
+        result[seqid].sort(key=lambda j: (j.start, j.end))
+
+    total = sum(len(j) for j in result.values())
+    logger.info(
+        f"Aggregated {total} junctions from {len(bam_paths)} samples "
+        f"(min_samples={min_samples}, min_reads_per_sample={min_reads_per_sample})"
+    )
+
+    return dict(result)
+
+
+def multi_sample_to_standard_junctions(
+    multi_junctions: dict[str, list[MultiSampleJunction]],
+) -> dict[str, list[SpliceJunction]]:
+    """Convert MultiSampleJunction dict to standard SpliceJunction dict.
+
+    Args:
+        multi_junctions: Dictionary from aggregate_junctions_multi_sample.
+
+    Returns:
+        Dictionary mapping seqid to list of SpliceJunction objects.
+    """
+    return {
+        seqid: [mj.to_splice_junction() for mj in junctions]
+        for seqid, junctions in multi_junctions.items()
+    }
+
+
+def load_junctions_from_bed(
+    bed_path: Path | str,
+    min_reads: int = 1,
+) -> dict[str, list[SpliceJunction]]:
+    """Load junctions from a BED file and organize by seqid.
+
+    Args:
+        bed_path: Path to BED file with junctions.
+        min_reads: Minimum read count to include junction.
+
+    Returns:
+        Dictionary mapping seqid to list of SpliceJunction objects.
+    """
+    junctions = JunctionExtractor.from_bed(bed_path)
+
+    # Filter by min_reads and organize by seqid
+    result: dict[str, list[SpliceJunction]] = defaultdict(list)
+    for j in junctions:
+        if j.read_count >= min_reads:
+            result[j.seqid].append(j)
+
+    # Sort by position
+    for seqid in result:
+        result[seqid].sort(key=lambda j: (j.start, j.end))
+
+    return dict(result)
+
+
+def load_junctions_from_star_sj(
+    sj_path: Path | str,
+    min_reads: int = 1,
+    include_multi_mappers: bool = True,
+) -> dict[str, list[SpliceJunction]]:
+    """Load junctions from STAR SJ.out.tab file.
+
+    STAR SJ.out.tab format (tab-separated):
+        1. chromosome
+        2. first base of intron (1-based)
+        3. last base of intron (1-based)
+        4. strand (0: undefined, 1: +, 2: -)
+        5. intron motif (0: non-canonical, 1: GT/AG, 2: CT/AC, 3: GC/AG, 4: CT/GC, 5: AT/AC, 6: GT/AT)
+        6. annotation status (0: unannotated, 1: annotated)
+        7. number of uniquely mapping reads
+        8. number of multi-mapping reads
+        9. maximum spliced alignment overhang
+
+    Args:
+        sj_path: Path to STAR SJ.out.tab file.
+        min_reads: Minimum read count to include junction.
+        include_multi_mappers: Include multi-mapping reads in count.
+
+    Returns:
+        Dictionary mapping seqid to list of SpliceJunction objects.
+    """
+    # STAR strand encoding
+    STAR_STRAND = {0: ".", 1: "+", 2: "-"}
+
+    # STAR motif encoding (for is_canonical)
+    # 0: non-canonical, 1: GT/AG, 2: CT/AC, 3: GC/AG, 4: CT/GC, 5: AT/AC, 6: GT/AT
+    CANONICAL_MOTIFS = {1, 2, 3, 4, 5, 6}
+
+    result: dict[str, list[SpliceJunction]] = defaultdict(list)
+
+    with open(sj_path) as f:
+        for line in f:
+            if not line.strip():
+                continue
+
+            parts = line.strip().split("\t")
+            if len(parts) < 7:
+                logger.warning(f"Skipping malformed line in {sj_path}: {line.strip()}")
+                continue
+
+            seqid = parts[0]
+            # STAR uses 1-based coordinates, convert to 0-based half-open
+            start = int(parts[1]) - 1  # First intronic base (0-based)
+            end = int(parts[2])  # Last intronic base + 1 (0-based exclusive)
+            strand = STAR_STRAND.get(int(parts[3]), ".")
+            motif = int(parts[4])
+            unique_reads = int(parts[6])
+            multi_reads = int(parts[7]) if len(parts) > 7 else 0
+
+            if include_multi_mappers:
+                total_reads = unique_reads + multi_reads
+            else:
+                total_reads = unique_reads
+
+            if total_reads < min_reads:
+                continue
+
+            is_canonical = motif in CANONICAL_MOTIFS
+
+            junction = SpliceJunction(
+                seqid=seqid,
+                start=start,
+                end=end,
+                strand=strand,
+                read_count=total_reads,
+                unique_count=unique_reads,
+                is_canonical=is_canonical,
+            )
+            result[seqid].append(junction)
+
+    # Sort by position
+    for seqid in result:
+        result[seqid].sort(key=lambda j: (j.start, j.end))
+
+    total = sum(len(j) for j in result.values())
+    logger.info(f"Loaded {total} junctions from STAR SJ file: {sj_path}")
+
+    return dict(result)
+
+
+def detect_junction_file_format(file_path: Path | str) -> str:
+    """Detect the format of a junction file.
+
+    Args:
+        file_path: Path to the junction file.
+
+    Returns:
+        Format string: "bed", "star_sj", or "unknown".
+    """
+    path = Path(file_path)
+
+    # Check by extension first
+    if path.name.endswith("_SJ.out.tab") or path.name.endswith(".SJ.out.tab"):
+        return "star_sj"
+    if path.suffix.lower() in (".bed", ".bed6", ".bed12"):
+        return "bed"
+
+    # Try to detect by content
+    with open(path) as f:
+        first_line = f.readline().strip()
+
+        # Skip header/comment lines
+        while first_line.startswith("#") or not first_line:
+            first_line = f.readline().strip()
+            if not first_line:
+                return "unknown"
+
+        parts = first_line.split("\t")
+
+        # STAR SJ.out.tab has exactly 9 columns, all numeric except first
+        if len(parts) == 9:
+            try:
+                # Columns 2-9 should be integers
+                for i in range(1, 9):
+                    int(parts[i])
+                return "star_sj"
+            except ValueError:
+                pass
+
+        # BED format: at least 3 columns, columns 2-3 are integers
+        if len(parts) >= 3:
+            try:
+                int(parts[1])
+                int(parts[2])
+                return "bed"
+            except ValueError:
+                pass
+
+    return "unknown"
+
+
+def load_junctions_auto(
+    file_path: Path | str,
+    min_reads: int = 1,
+) -> dict[str, list[SpliceJunction]]:
+    """Load junctions from a file, auto-detecting format.
+
+    Supports BED format and STAR SJ.out.tab format.
+
+    Args:
+        file_path: Path to junction file.
+        min_reads: Minimum read count to include junction.
+
+    Returns:
+        Dictionary mapping seqid to list of SpliceJunction objects.
+
+    Raises:
+        ValueError: If file format cannot be detected.
+    """
+    fmt = detect_junction_file_format(file_path)
+
+    if fmt == "star_sj":
+        logger.info(f"Detected STAR SJ.out.tab format: {file_path}")
+        return load_junctions_from_star_sj(file_path, min_reads=min_reads)
+    elif fmt == "bed":
+        logger.info(f"Detected BED format: {file_path}")
+        return load_junctions_from_bed(file_path, min_reads=min_reads)
+    else:
+        raise ValueError(
+            f"Could not detect junction file format: {file_path}. "
+            "Expected BED or STAR SJ.out.tab format."
+        )
+
+
+def aggregate_junctions_from_files(
+    file_paths: list[Path | str],
+    sample_names: list[str] | None = None,
+    min_reads_per_sample: int = 1,
+    min_samples: int = 1,
+) -> dict[str, list[MultiSampleJunction]]:
+    """Aggregate junctions from multiple BED or STAR SJ.out.tab files.
+
+    This function loads junctions from multiple files and aggregates them
+    by position, tracking per-sample read counts. Format is auto-detected.
+
+    Args:
+        file_paths: List of paths to junction files (BED or STAR SJ.out.tab).
+        sample_names: Optional list of sample names (defaults to filenames).
+        min_reads_per_sample: Minimum reads in a sample to count as supporting.
+        min_samples: Minimum number of supporting samples to include junction.
+
+    Returns:
+        Dictionary mapping seqid to list of MultiSampleJunction objects.
+    """
+    if not file_paths:
+        return {}
+
+    # Generate sample names if not provided
+    if sample_names is None:
+        sample_names = [Path(p).stem for p in file_paths]
+
+    if len(sample_names) != len(file_paths):
+        raise ValueError("Number of sample names must match number of files")
+
+    # Collect junctions from each file
+    # Key: (seqid, start, end) -> {strand: {sample: (total, unique)}}
+    junction_data: dict[
+        tuple[str, int, int], dict[str, dict[str, tuple[int, int]]]
+    ] = defaultdict(lambda: defaultdict(dict))
+
+    for file_path, sample_name in zip(file_paths, sample_names):
+        logger.info(f"Loading junctions from {sample_name}: {file_path}")
+
+        # Load junctions (auto-detect format), no filtering yet
+        sample_junctions = load_junctions_auto(file_path, min_reads=1)
+
+        # Aggregate into junction_data
+        for seqid, junctions in sample_junctions.items():
+            for j in junctions:
+                key = (seqid, j.start, j.end)
+                junction_data[key][j.strand][sample_name] = (j.read_count, j.unique_count)
+
+    # Build MultiSampleJunction objects (same logic as BAM aggregation)
+    result: dict[str, list[MultiSampleJunction]] = defaultdict(list)
+
+    for (seqid, start, end), strand_data in junction_data.items():
+        all_sample_reads: dict[str, int] = {}
+        all_sample_unique: dict[str, int] = {}
+
+        for strand, sample_counts in strand_data.items():
+            for sample, (reads, unique) in sample_counts.items():
+                all_sample_reads[sample] = all_sample_reads.get(sample, 0) + reads
+                all_sample_unique[sample] = all_sample_unique.get(sample, 0) + unique
+
+        # Count supporting samples
+        n_supporting = sum(
+            1 for reads in all_sample_reads.values() if reads >= min_reads_per_sample
+        )
+
+        if n_supporting < min_samples:
+            continue
+
+        # Determine strand (most common)
+        strand_totals = {
+            strand: sum(counts[0] for counts in sample_counts.values())
+            for strand, sample_counts in strand_data.items()
+        }
+        best_strand = max(strand_totals.keys(), key=lambda s: strand_totals[s])
+
+        total_reads = sum(all_sample_reads.values())
+        total_unique = sum(all_sample_unique.values())
+
+        junction = MultiSampleJunction(
+            seqid=seqid,
+            start=start,
+            end=end,
+            strand=best_strand,
+            total_reads=total_reads,
+            total_unique=total_unique,
+            sample_reads=all_sample_reads,
+            sample_unique=all_sample_unique,
+            n_samples_supporting=n_supporting,
+        )
+        result[seqid].append(junction)
+
+    # Sort by position
+    for seqid in result:
+        result[seqid].sort(key=lambda j: (j.start, j.end))
+
+    total = sum(len(j) for j in result.values())
+    logger.info(
+        f"Aggregated {total} junctions from {len(file_paths)} files "
+        f"(min_samples={min_samples}, min_reads_per_sample={min_reads_per_sample})"
+    )
+
+    return dict(result)
+
+
+# =============================================================================
 # Legacy Compatibility
 # =============================================================================
 

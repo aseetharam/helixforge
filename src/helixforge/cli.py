@@ -4,8 +4,8 @@ This module provides the main entry point for the helixforge CLI tool.
 It uses Click to define commands and subcommands for various operations.
 
 Commands:
-    refine: Main refinement pipeline
-    add-evidence: Add RNA-seq evidence to predictions
+    refine: Main refinement pipeline (requires HDF5 + RNA-seq)
+    evidence: Score genes with RNA-seq evidence (scoring only)
     qc: Generate quality control reports
     validate: Homology-based validation
     confidence: Calculate confidence scores for gene predictions
@@ -13,7 +13,8 @@ Commands:
 
 Example:
     $ helixforge --help
-    $ helixforge refine --predictions helixer.h5 --genome genome.fa
+    $ helixforge refine -p helixer.h5 -g helixer.gff3 --genome genome.fa --rnaseq-bam rnaseq.bam -o refined.gff3
+    $ helixforge evidence -g predictions.gff3 -b rnaseq.bam -o annotated.gff3
     $ helixforge confidence -p predictions.h5 -g genes.gff3 --genome genome.fa -o scores.tsv
     $ helixforge qc --gff refined.gff3 --output report.html
 """
@@ -53,101 +54,519 @@ def main(ctx: click.Context, verbose: bool, quiet: bool) -> None:
 
 @main.command()
 @click.option(
+    "--helixer-h5",
     "-p",
-    "--predictions",
     type=click.Path(exists=True, path_type=Path),
     required=True,
-    help="Helixer HDF5 predictions file.",
+    help="Helixer HDF5 predictions file (required for confidence scoring).",
 )
 @click.option(
+    "--helixer-gff",
     "-g",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Helixer GFF3 predictions file.",
+)
+@click.option(
     "--genome",
     type=click.Path(exists=True, path_type=Path),
     required=True,
     help="Reference genome FASTA file.",
 )
 @click.option(
-    "-b",
-    "--bam",
-    type=click.Path(exists=True, path_type=Path),
+    "--rnaseq-bam",
+    type=str,
     multiple=True,
-    help="RNA-seq BAM file(s) for evidence. Can be specified multiple times.",
+    help="RNA-seq BAM file(s). Comma-separated or repeated. Required unless --junctions-bed.",
+)
+@click.option(
+    "--rnaseq-bam-list",
+    type=click.Path(exists=True, path_type=Path),
+    help="File containing BAM paths (one per line).",
+)
+@click.option(
+    "--junctions-bed",
+    type=str,
+    multiple=True,
+    help="Junction file(s) in BED or STAR SJ.out.tab format. Alternative to BAM.",
+)
+@click.option(
+    "--junctions-list",
+    type=click.Path(exists=True, path_type=Path),
+    help="File containing junction file paths (one per line).",
 )
 @click.option(
     "-o",
     "--output",
     type=click.Path(path_type=Path),
     required=True,
-    help="Output GFF3 file path.",
+    help="Output refined GFF3 file.",
 )
 @click.option(
-    "--min-confidence",
-    type=float,
-    default=0.5,
+    "-r",
+    "--report",
+    type=click.Path(path_type=Path),
+    help="Output refine report TSV with all scores and corrections.",
+)
+@click.option(
+    "--splice-details",
+    type=click.Path(path_type=Path),
+    help="Output detailed splice corrections TSV.",
+)
+@click.option(
+    "--evidence-details",
+    type=click.Path(path_type=Path),
+    help="Output per-gene evidence details TSV.",
+)
+@click.option(
+    "--unsupported-bed",
+    type=click.Path(path_type=Path),
+    help="Output BED of introns without RNA-seq support.",
+)
+# Splice refinement options
+@click.option(
+    "--max-shift",
+    type=int,
+    default=15,
     show_default=True,
-    help="Minimum confidence score to retain a gene.",
+    help="Maximum splice site correction distance (bp).",
 )
 @click.option(
-    "-j",
-    "--threads",
+    "--min-reads",
+    type=int,
+    default=3,
+    show_default=True,
+    help="Minimum reads to support a splice junction.",
+)
+@click.option(
+    "--min-tissues",
     type=int,
     default=1,
     show_default=True,
-    help="Number of parallel threads.",
+    help="Minimum samples/tissues supporting a junction. When >1, --min-reads applies per-sample.",
+)
+# Boundary adjustment options
+@click.option(
+    "--adjust-boundaries/--no-adjust-boundaries",
+    default=True,
+    show_default=True,
+    help="Adjust start/stop codon boundaries.",
 )
 @click.option(
-    "--chunk-size",
+    "--boundary-window",
     type=int,
-    default=1000000,
+    default=30,
     show_default=True,
-    help="Genomic chunk size for parallel processing.",
+    help="Search window for boundary adjustment (bp).",
+)
+# Evidence scoring options
+@click.option(
+    "--min-coverage",
+    type=int,
+    default=5,
+    show_default=True,
+    help="Minimum coverage to count exon as expressed.",
+)
+@click.option(
+    "--boundary-tolerance",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Maximum bp shift for near-match junction comparison.",
+)
+@click.option(
+    "--no-coverage",
+    is_flag=True,
+    help="Skip exon coverage analysis (junction-only evidence).",
+)
+# Confidence options
+@click.option(
+    "--confidence-threshold",
+    type=float,
+    default=0.5,
+    show_default=True,
+    help="Minimum confidence to flag LOW_CONF.",
+)
+# Execution options
+@click.option(
+    "-j",
+    "--workers",
+    type=int,
+    default=1,
+    show_default=True,
+    help="Number of parallel workers.",
+)
+@click.option(
+    "-v",
+    "--verbose",
+    "verbose_flag",
+    is_flag=True,
+    help="Verbose output.",
+)
+# Chunk-aware processing options
+@click.option(
+    "--region",
+    type=str,
+    default=None,
+    help="Process only this region (format: seqid:start-end, 1-based inclusive).",
+)
+@click.option(
+    "--scaffold",
+    type=str,
+    default=None,
+    help="Process only this scaffold.",
+)
+@click.option(
+    "--chunk-id",
+    type=str,
+    default=None,
+    help="Chunk identifier for logging in parallel mode.",
 )
 @click.pass_context
 def refine(
     ctx: click.Context,
-    predictions: Path,
+    helixer_h5: Path,
+    helixer_gff: Path,
     genome: Path,
-    bam: tuple[Path, ...],
+    rnaseq_bam: tuple[str, ...],
+    rnaseq_bam_list: Optional[Path],
+    junctions_bed: tuple[str, ...],
+    junctions_list: Optional[Path],
     output: Path,
-    min_confidence: float,
-    threads: int,
-    chunk_size: int,
+    report: Optional[Path],
+    splice_details: Optional[Path],
+    evidence_details: Optional[Path],
+    unsupported_bed: Optional[Path],
+    max_shift: int,
+    min_reads: int,
+    min_tissues: int,
+    adjust_boundaries: bool,
+    boundary_window: int,
+    min_coverage: int,
+    boundary_tolerance: int,
+    no_coverage: bool,
+    confidence_threshold: float,
+    workers: int,
+    verbose_flag: bool,
+    region: Optional[str],
+    scaffold: Optional[str],
+    chunk_id: Optional[str],
 ) -> None:
-    """Refine Helixer predictions using evidence and confidence scoring.
+    """Refine Helixer predictions using RNA-seq evidence and confidence scoring.
 
-    This is the main HelixForge pipeline that takes raw Helixer predictions
-    and produces refined, high-quality gene annotations.
+    This is the main HelixForge pipeline that combines splice site correction,
+    boundary adjustment, confidence scoring, and evidence scoring into a single
+    workflow. RNA-seq evidence is REQUIRED for refinement.
 
     \b
     Steps performed:
-    1. Load Helixer HDF5 predictions
-    2. Extract RNA-seq evidence (if BAM files provided)
-    3. Calculate confidence scores
-    4. Refine gene boundaries
-    5. Detect and resolve merge/split errors
-    6. Apply quality filters
-    7. Write refined GFF3
+    1. Correct splice sites using RNA-seq junctions
+    2. Adjust start/stop codon boundaries (optional)
+    3. Calculate confidence scores from Helixer HDF5
+    4. Score evidence support from RNA-seq
+    5. Write refined GFF3 with all scores as attributes
 
-    Example:
-        $ helixforge refine -p helixer.h5 -g genome.fa -b rnaseq.bam -o refined.gff3
+    \b
+    Output GFF3 attributes:
+    - confidence: Gene confidence score (0-1)
+    - evidence_level: full/partial/minimal/none
+    - aed: Annotation Edit Distance (0-1, MAKER-compatible)
+    - junction_support: Fraction of supported junctions
+    - splice_corrections: Number of corrected splice sites
+
+    \b
+    Examples:
+        # Basic refinement with single BAM
+        $ helixforge refine -p helixer.h5 -g helixer.gff3 --genome genome.fa \\
+            --rnaseq-bam rnaseq.bam -o refined.gff3
+
+        # Multi-tissue with reports
+        $ helixforge refine -p helixer.h5 -g helixer.gff3 --genome genome.fa \\
+            --rnaseq-bam liver.bam,brain.bam --min-tissues 2 \\
+            -o refined.gff3 -r refine_report.tsv
+
+        # Using STAR junction files
+        $ helixforge refine -p helixer.h5 -g helixer.gff3 --genome genome.fa \\
+            --junctions-bed sample1_SJ.out.tab,sample2_SJ.out.tab \\
+            -o refined.gff3
     """
-    # TODO: Implement refinement pipeline
-    console.print("[yellow]refine command not yet implemented[/yellow]")
-    console.print(f"  Predictions: {predictions}")
-    console.print(f"  Genome: {genome}")
-    console.print(f"  BAM files: {bam if bam else 'None'}")
-    console.print(f"  Output: {output}")
-    console.print(f"  Min confidence: {min_confidence}")
-    console.print(f"  Threads: {threads}")
-    raise SystemExit(1)
+    from helixforge.core.refine import RefineConfig, RefinePipeline, RefineReportWriter
+    from helixforge.io.fasta import GenomeAccessor
+    from helixforge.io.gff import GFF3Parser, GFF3Writer
+    from helixforge.io.hdf5 import HelixerHDF5Reader
+    from helixforge.utils.regions import (
+        GenomicRegion,
+        parse_region,
+        region_from_scaffold,
+        validate_region,
+    )
+
+    verbose = ctx.obj.get("verbose", False) or verbose_flag
+    quiet = ctx.obj.get("quiet", False)
+
+    # Log chunk ID if provided
+    if chunk_id and not quiet:
+        console.print(f"[blue]Chunk ID:[/blue] {chunk_id}")
+
+    # Collect BAM paths
+    bam_paths: list[Path] = []
+    for bam_arg in rnaseq_bam:
+        for bam_str in bam_arg.split(","):
+            bam_str = bam_str.strip()
+            if bam_str:
+                bam_path = Path(bam_str)
+                if not bam_path.exists():
+                    console.print(f"[red]Error:[/red] BAM file not found: {bam_path}")
+                    raise SystemExit(1)
+                bam_paths.append(bam_path)
+
+    if rnaseq_bam_list:
+        with open(rnaseq_bam_list) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    bam_path = Path(line)
+                    if not bam_path.exists():
+                        console.print(f"[red]Error:[/red] BAM file not found: {bam_path}")
+                        raise SystemExit(1)
+                    bam_paths.append(bam_path)
+
+    # Collect junction file paths
+    junction_paths: list[Path] = []
+    for junc_arg in junctions_bed:
+        for junc_str in junc_arg.split(","):
+            junc_str = junc_str.strip()
+            if junc_str:
+                junc_path = Path(junc_str)
+                if not junc_path.exists():
+                    console.print(f"[red]Error:[/red] Junction file not found: {junc_path}")
+                    raise SystemExit(1)
+                junction_paths.append(junc_path)
+
+    if junctions_list:
+        with open(junctions_list) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    junc_path = Path(line)
+                    if not junc_path.exists():
+                        console.print(f"[red]Error:[/red] Junction file not found: {junc_path}")
+                        raise SystemExit(1)
+                    junction_paths.append(junc_path)
+
+    # Validate - require at least one RNA-seq source
+    if not bam_paths and not junction_paths:
+        console.print(
+            "[red]Error:[/red] RNA-seq evidence is required for refinement.\n"
+            "Provide --rnaseq-bam, --rnaseq-bam-list, --junctions-bed, or --junctions-list"
+        )
+        raise SystemExit(1)
+
+    # Validate min-tissues
+    n_samples = len(bam_paths) if bam_paths else len(junction_paths)
+    if min_tissues > 1 and n_samples < 2:
+        console.print(
+            "[red]Error:[/red] --min-tissues > 1 requires multiple input files"
+        )
+        raise SystemExit(1)
+
+    if not quiet:
+        console.print(f"[blue]Helixer H5:[/blue] {helixer_h5}")
+        console.print(f"[blue]Helixer GFF:[/blue] {helixer_gff}")
+        console.print(f"[blue]Genome:[/blue] {genome}")
+        if bam_paths:
+            console.print(f"[blue]RNA-seq BAMs:[/blue] {len(bam_paths)} file(s)")
+            for bp in bam_paths:
+                console.print(f"  - {bp.name}")
+        if junction_paths:
+            console.print(f"[blue]Junction files:[/blue] {len(junction_paths)} file(s)")
+            for jp in junction_paths:
+                console.print(f"  - {jp.name}")
+        if min_tissues > 1:
+            console.print(f"[blue]Min tissues:[/blue] {min_tissues}")
+        console.print(f"[blue]Output:[/blue] {output}")
+
+    try:
+        # Load genome
+        genome_accessor = GenomeAccessor(genome)
+
+        # Parse region constraints
+        target_region: GenomicRegion | None = None
+
+        if region:
+            try:
+                target_region = parse_region(region)
+                validate_region(target_region, genome_accessor)
+                if not quiet:
+                    console.print(f"[blue]Processing region:[/blue] {target_region}")
+            except ValueError as e:
+                console.print(f"[red]Error:[/red] {e}")
+                genome_accessor.close()
+                raise SystemExit(1)
+        elif scaffold:
+            if scaffold not in genome_accessor.scaffold_lengths:
+                console.print(f"[red]Error:[/red] Scaffold '{scaffold}' not found in genome")
+                genome_accessor.close()
+                raise SystemExit(1)
+            scaffold_len = genome_accessor.scaffold_lengths[scaffold]
+            target_region = region_from_scaffold(scaffold, scaffold_len)
+            if not quiet:
+                console.print(f"[blue]Processing scaffold:[/blue] {scaffold} ({scaffold_len:,} bp)")
+
+        # Load HDF5 predictions
+        if not quiet:
+            console.print("[dim]Loading HDF5 predictions...[/dim]")
+        hdf5_reader = HelixerHDF5Reader(helixer_h5)
+
+        # Load genes from GFF
+        if not quiet:
+            console.print("[dim]Loading gene predictions...[/dim]")
+        parser = GFF3Parser(helixer_gff)
+        all_genes = list(parser.iter_genes())
+
+        # Filter to region if specified
+        if target_region:
+            genes = [
+                g for g in all_genes
+                if g.seqid == target_region.seqid
+                and g.start >= target_region.start
+                and g.end <= target_region.end
+            ]
+        else:
+            genes = all_genes
+
+        if not quiet:
+            console.print(f"[dim]Loaded {len(genes)} genes[/dim]")
+
+        # Configure pipeline
+        config = RefineConfig(
+            max_shift=max_shift,
+            min_junction_reads=min_reads,
+            min_tissues=min_tissues,
+            adjust_boundaries=adjust_boundaries,
+            boundary_search_window=boundary_window,
+            confidence_threshold=confidence_threshold,
+            min_exon_coverage=min_coverage,
+            boundary_tolerance=boundary_tolerance,
+            skip_coverage=no_coverage,
+        )
+
+        # Create pipeline
+        if not quiet:
+            console.print("[dim]Initializing refinement pipeline...[/dim]")
+
+        pipeline = RefinePipeline(
+            genome=genome_accessor,
+            hdf5_reader=hdf5_reader,
+            bam_files=bam_paths if bam_paths else None,
+            junction_files=junction_paths if junction_paths else None,
+            config=config,
+            verbose=verbose,
+            quiet=quiet,
+        )
+
+        # Refine genes
+        if not quiet:
+            console.print("[dim]Refining genes...[/dim]")
+
+        refined_genes = []
+        for gene in genes:
+            refined = pipeline.refine_gene(gene)
+            refined_genes.append(refined)
+
+        # Write output GFF
+        if not quiet:
+            console.print("[dim]Writing refined GFF...[/dim]")
+
+        writer = GFF3Writer(output)
+        for refined in refined_genes:
+            # Add additional attributes not already set by the pipeline
+            # (pipeline already adds: confidence_score, evidence_score, aed,
+            #  junction_support, mean_coverage, flags)
+            attrs = refined.gene.attributes.copy()
+            if refined.evidence:
+                attrs["evidence_level"] = refined.evidence.evidence_level.value
+            if refined.splice_corrections > 0:
+                attrs["splice_corrections"] = str(refined.splice_corrections)
+            if refined.boundary_adjusted:
+                attrs["boundary_adjusted"] = "yes"
+
+            # Write gene with updated attributes
+            refined.gene.attributes = attrs
+            writer.write_gene(refined.gene)
+        writer.close()
+
+        # Write reports
+        if report:
+            report_writer = RefineReportWriter()
+            report_writer.write_summary_tsv(refined_genes, report)
+            if not quiet:
+                console.print(f"[green]Wrote refine report:[/green] {report}")
+
+        if splice_details:
+            report_writer = RefineReportWriter()
+            report_writer.write_splice_details_tsv(refined_genes, splice_details)
+            if not quiet:
+                console.print(f"[green]Wrote splice details:[/green] {splice_details}")
+
+        if evidence_details:
+            from helixforge.core.evidence_output import write_evidence_report_tsv
+            scores = [r.evidence for r in refined_genes if r.evidence is not None]
+            write_evidence_report_tsv(scores, evidence_details)
+            if not quiet:
+                console.print(f"[green]Wrote evidence details:[/green] {evidence_details}")
+
+        if unsupported_bed:
+            report_writer = RefineReportWriter()
+            report_writer.write_unsupported_introns_bed(refined_genes, unsupported_bed)
+            if not quiet:
+                console.print(f"[green]Wrote unsupported introns:[/green] {unsupported_bed}")
+
+        # Clean up
+        hdf5_reader.close()
+        genome_accessor.close()
+
+        # Print summary
+        if not quiet:
+            n_corrected = sum(1 for r in refined_genes if r.splice_corrections > 0)
+            n_boundary = sum(1 for r in refined_genes if r.boundary_adjusted)
+            n_with_evidence = sum(1 for r in refined_genes if r.evidence is not None)
+
+            mean_conf = 0.0
+            if refined_genes:
+                confs = [r.confidence.overall_score for r in refined_genes if r.confidence]
+                if confs:
+                    mean_conf = sum(confs) / len(confs)
+
+            mean_aed = 0.0
+            if n_with_evidence > 0:
+                aeds = [r.evidence.aed for r in refined_genes if r.evidence]
+                mean_aed = sum(aeds) / len(aeds) if aeds else 0.0
+
+            console.print("")
+            console.print("[bold]Refinement Summary:[/bold]")
+            console.print(f"  Total genes:           {len(refined_genes):,}")
+            console.print(f"  Splice corrections:    {n_corrected:,} genes modified")
+            console.print(f"  Boundary adjustments:  {n_boundary:,} genes")
+            console.print(f"  Mean confidence:       {mean_conf:.4f}")
+            console.print(f"  Mean AED:              {mean_aed:.4f}")
+            console.print("")
+            console.print(f"[green]Wrote refined GFF:[/green] {output}")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise SystemExit(1)
 
 
 # =============================================================================
-# add-evidence command
+# evidence command
 # =============================================================================
 
 
-@main.command("add-evidence")
+@main.command("evidence")
 @click.option(
     "-g",
     "--gff",
@@ -158,10 +577,14 @@ def refine(
 @click.option(
     "-b",
     "--bam",
-    type=click.Path(exists=True, path_type=Path),
-    required=True,
+    type=str,
     multiple=True,
-    help="RNA-seq BAM file(s). Can be specified multiple times.",
+    help="RNA-seq BAM file(s). Comma-separated or specify multiple times.",
+)
+@click.option(
+    "--bam-list",
+    type=click.Path(exists=True, path_type=Path),
+    help="File containing BAM paths (one per line).",
 )
 @click.option(
     "-o",
@@ -171,31 +594,261 @@ def refine(
     help="Output GFF3 file with evidence annotations.",
 )
 @click.option(
+    "--report",
+    "-r",
+    type=click.Path(path_type=Path),
+    help="Output detailed evidence report TSV.",
+)
+@click.option(
+    "--summary",
+    type=click.Path(path_type=Path),
+    help="Output evidence summary TSV for QC aggregation.",
+)
+@click.option(
+    "--junction-details",
+    type=click.Path(path_type=Path),
+    help="Output per-junction details TSV.",
+)
+@click.option(
+    "--exon-details",
+    type=click.Path(path_type=Path),
+    help="Output per-exon details TSV.",
+)
+@click.option(
     "--min-reads",
     type=int,
     default=3,
     show_default=True,
     help="Minimum reads to support a splice junction.",
 )
+@click.option(
+    "--min-coverage",
+    type=int,
+    default=5,
+    show_default=True,
+    help="Minimum coverage to count exon as expressed.",
+)
+@click.option(
+    "--boundary-tolerance",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Maximum bp shift for near-match junctions.",
+)
+@click.option(
+    "--no-coverage",
+    is_flag=True,
+    help="Skip exon coverage analysis (junction-only mode).",
+)
 @click.pass_context
 def add_evidence(
     ctx: click.Context,
     gff: Path,
-    bam: tuple[Path, ...],
+    bam: tuple[str, ...],
+    bam_list: Optional[Path],
     output: Path,
+    report: Optional[Path],
+    summary: Optional[Path],
+    junction_details: Optional[Path],
+    exon_details: Optional[Path],
     min_reads: int,
+    min_coverage: int,
+    boundary_tolerance: int,
+    no_coverage: bool,
 ) -> None:
-    """Add RNA-seq evidence to existing gene predictions.
+    """Score gene predictions with RNA-seq evidence.
 
-    Annotates gene models with supporting evidence from RNA-seq data,
-    including splice junction support and coverage metrics.
+    Calculates evidence support for each gene based on:
+    - Splice junction support from RNA-seq alignments
+    - Exon coverage profiles (unless --no-coverage)
+    - Boundary agreement at start/stop codons
 
-    Example:
-        $ helixforge add-evidence -g predictions.gff3 -b rnaseq.bam -o annotated.gff3
+    Outputs an Annotation Edit Distance (AED) score for each gene,
+    where 0 = perfect support and 1 = no support.
+
+    This command performs SCORING ONLY - it does not modify splice sites
+    or boundaries. Use 'helixforge refine' for full refinement.
+
+    \b
+    Output attributes added to GFF3:
+    - evidence_level: full/partial/minimal/none
+    - aed: Annotation Edit Distance (0-1)
+    - junction_support: fraction of supported junctions
+    - exon_coverage: fraction of expressed exons
+    - evidence_flags: any warning flags
+
+    \b
+    Examples:
+        # Basic usage
+        $ helixforge evidence -g predictions.gff3 -b rnaseq.bam -o annotated.gff3
+
+        # Multiple BAMs
+        $ helixforge evidence -g predictions.gff3 -b tissue1.bam,tissue2.bam -o annotated.gff3
+
+        # With detailed reports
+        $ helixforge evidence -g predictions.gff3 -b rnaseq.bam -o annotated.gff3 \\
+            --report evidence_report.tsv --summary evidence_summary.tsv
     """
-    # TODO: Implement evidence addition
-    console.print("[yellow]add-evidence command not yet implemented[/yellow]")
-    raise SystemExit(1)
+    from helixforge.core.evidence import EvidenceScorer, EvidenceScorerConfig
+    from helixforge.core.evidence_output import (
+        update_gff_with_evidence,
+        write_evidence_report_tsv,
+        write_exon_details_tsv,
+        write_evidence_summary_txt,
+        write_gene_evidence_summary_tsv,
+        write_junction_details_tsv,
+    )
+    from helixforge.io.bam import JunctionExtractor
+    from helixforge.io.gff import GFF3Parser
+
+    verbose = ctx.obj.get("verbose", False)
+    quiet = ctx.obj.get("quiet", False)
+
+    # Collect BAM files
+    bam_paths: list[Path] = []
+
+    # From --bam (may be comma-separated)
+    for bam_arg in bam:
+        for path_str in bam_arg.split(","):
+            path_str = path_str.strip()
+            if path_str:
+                bam_path = Path(path_str)
+                if not bam_path.exists():
+                    console.print(f"[red]Error:[/red] BAM file not found: {bam_path}")
+                    raise SystemExit(1)
+                bam_paths.append(bam_path)
+
+    # From --bam-list
+    if bam_list:
+        with open(bam_list) as f:
+            for line in f:
+                path_str = line.strip()
+                if path_str and not path_str.startswith("#"):
+                    bam_path = Path(path_str)
+                    if not bam_path.exists():
+                        console.print(f"[red]Error:[/red] BAM file not found: {bam_path}")
+                        raise SystemExit(1)
+                    bam_paths.append(bam_path)
+
+    if not bam_paths:
+        console.print("[red]Error:[/red] At least one BAM file is required")
+        raise SystemExit(1)
+
+    if not quiet:
+        console.print(f"[blue]Input GFF:[/blue] {gff}")
+        console.print(f"[blue]BAM files:[/blue] {len(bam_paths)}")
+        for bam_path in bam_paths:
+            console.print(f"  - {bam_path}")
+        console.print(f"[blue]Output GFF:[/blue] {output}")
+
+    try:
+        # Parse GFF
+        if not quiet:
+            console.print("[dim]Loading gene predictions...[/dim]")
+        parser = GFF3Parser(gff)
+        genes = list(parser.iter_genes())
+        if not quiet:
+            console.print(f"[dim]Loaded {len(genes)} genes[/dim]")
+
+        # Extract junctions from all BAM files
+        if not quiet:
+            console.print("[dim]Extracting splice junctions...[/dim]")
+
+        all_junctions: dict[str, list] = {}
+        primary_extractor = None
+
+        for bam_path in bam_paths:
+            extractor = JunctionExtractor(bam_path, min_reads=1)
+            junctions = extractor.extract_all(min_reads=1)
+
+            # Merge junctions
+            for seqid, juncs in junctions.items():
+                if seqid not in all_junctions:
+                    all_junctions[seqid] = []
+                all_junctions[seqid].extend(juncs)
+
+            # Keep first extractor for coverage analysis
+            if primary_extractor is None and not no_coverage:
+                primary_extractor = extractor
+            else:
+                extractor.close()
+
+        total_junctions = sum(len(j) for j in all_junctions.values())
+        if not quiet:
+            console.print(f"[dim]Extracted {total_junctions:,} junctions[/dim]")
+
+        # Configure scorer
+        config = EvidenceScorerConfig(
+            min_junction_reads=min_reads,
+            min_exon_coverage=min_coverage,
+            boundary_tolerance=boundary_tolerance,
+        )
+        scorer = EvidenceScorer(config)
+
+        # Score genes
+        if not quiet:
+            console.print("[dim]Scoring genes...[/dim]")
+
+        scores = list(scorer.score_genes(
+            genes,
+            all_junctions,
+            extractor=primary_extractor if not no_coverage else None,
+        ))
+
+        # Close extractor if still open
+        if primary_extractor is not None:
+            primary_extractor.close()
+
+        # Write outputs
+        if not quiet:
+            console.print("[dim]Writing outputs...[/dim]")
+
+        # Main GFF output
+        update_gff_with_evidence(genes, scores, output)
+
+        # Optional reports
+        if report:
+            write_evidence_report_tsv(scores, report)
+            if not quiet:
+                console.print(f"[green]Wrote detailed report:[/green] {report}")
+
+        if summary:
+            write_gene_evidence_summary_tsv(scores, summary)
+            if not quiet:
+                console.print(f"[green]Wrote summary:[/green] {summary}")
+
+        if junction_details:
+            write_junction_details_tsv(scores, junction_details)
+            if not quiet:
+                console.print(f"[green]Wrote junction details:[/green] {junction_details}")
+
+        if exon_details:
+            write_exon_details_tsv(scores, exon_details)
+            if not quiet:
+                console.print(f"[green]Wrote exon details:[/green] {exon_details}")
+
+        # Print summary
+        if not quiet:
+            from helixforge.core.evidence import EvidenceLevel, summarize_evidence_scores
+
+            stats = summarize_evidence_scores(scores)
+            console.print("")
+            console.print("[bold]Evidence Summary:[/bold]")
+            console.print(f"  Total genes:         {stats['n_genes']:,}")
+            console.print(f"  Mean AED:            {stats['mean_aed']:.4f}")
+            console.print(f"  Full support:        {stats['n_full_support']:,} ({stats['n_full_support']/stats['n_genes']*100:.1f}%)")
+            console.print(f"  Partial support:     {stats['n_partial_support']:,} ({stats['n_partial_support']/stats['n_genes']*100:.1f}%)")
+            console.print(f"  Minimal support:     {stats['n_minimal_support']:,} ({stats['n_minimal_support']/stats['n_genes']*100:.1f}%)")
+            console.print(f"  No support:          {stats['n_no_support']:,} ({stats['n_no_support']/stats['n_genes']*100:.1f}%)")
+            console.print("")
+            console.print(f"[green]Wrote annotated GFF:[/green] {output}")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise SystemExit(1)
 
 
 # =============================================================================
@@ -221,14 +874,19 @@ def qc():
 
 @qc.command("aggregate")
 @click.option(
+    "--refine-tsv",
+    type=click.Path(exists=True, path_type=Path),
+    help="Refine report TSV from 'helixforge refine'. Contains confidence, splice, and evidence scores.",
+)
+@click.option(
     "--confidence-tsv",
     type=click.Path(exists=True, path_type=Path),
-    help="Confidence scores TSV from 'helixforge confidence'.",
+    help="Confidence scores TSV from 'helixforge confidence'. Alternative if not using --refine-tsv.",
 )
 @click.option(
     "--splice-tsv",
     type=click.Path(exists=True, path_type=Path),
-    help="Splice report TSV from 'helixforge splice'.",
+    help="Splice report TSV from 'helixforge splice' (deprecated). Use --refine-tsv instead.",
 )
 @click.option(
     "--homology-tsv",
@@ -266,6 +924,7 @@ def qc():
 @click.pass_context
 def qc_aggregate(
     ctx: click.Context,
+    refine_tsv: Optional[Path],
     confidence_tsv: Optional[Path],
     splice_tsv: Optional[Path],
     homology_tsv: Optional[Path],
@@ -274,24 +933,34 @@ def qc_aggregate(
     medium_threshold: float,
     low_threshold: float,
 ) -> None:
-    """Aggregate QC results from confidence, splice, and homology modules.
+    """Aggregate QC results from refine, confidence, splice, and homology modules.
 
     Combines results from individual analysis modules into unified GeneQC
     objects with tier classifications and appropriate flags.
 
-    Example:
-        $ helixforge qc aggregate --confidence-tsv scores.tsv --splice-tsv splice_report.tsv --homology-tsv validation.tsv -o qc_results.tsv
+    The preferred workflow is to use --refine-tsv from 'helixforge refine' output,
+    which includes confidence, splice, and evidence scores in a single file.
+
+    \b
+    Examples:
+        # Using refine output (recommended)
+        $ helixforge qc aggregate --refine-tsv refine_report.tsv --homology-tsv validation.tsv -o qc_results.tsv
+
+        # Using separate module outputs
+        $ helixforge qc aggregate --confidence-tsv scores.tsv --splice-tsv splice_report.tsv -o qc_results.tsv
     """
     from helixforge.qc import QCAggregator, QCAggregatorConfig, export_qc_tsv
 
     verbose = ctx.obj.get("verbose", False)
     quiet = ctx.obj.get("quiet", False)
 
-    if not confidence_tsv and not splice_tsv and not homology_tsv:
+    if not refine_tsv and not confidence_tsv and not splice_tsv and not homology_tsv:
         console.print("[red]Error:[/red] At least one input TSV is required")
         raise SystemExit(1)
 
     if not quiet:
+        if refine_tsv:
+            console.print(f"[blue]Refine TSV:[/blue] {refine_tsv}")
         if confidence_tsv:
             console.print(f"[blue]Confidence TSV:[/blue] {confidence_tsv}")
         if splice_tsv:
@@ -308,6 +977,7 @@ def qc_aggregate(
 
         aggregator = QCAggregator(config)
         gene_qcs = aggregator.aggregate_from_files(
+            refine_tsv=refine_tsv,
             confidence_tsv=confidence_tsv,
             splice_tsv=splice_tsv,
             homology_tsv=homology_tsv,
@@ -871,8 +1541,19 @@ def validate(
 @click.option(
     "--genome",
     type=click.Path(exists=True, path_type=Path),
-    required=True,
-    help="Reference genome FASTA file.",
+    required=False,
+    default=None,
+    help="Reference genome FASTA file. Optional if --input-h5 is provided or auto-detected.",
+)
+@click.option(
+    "--input-h5",
+    "input_h5",
+    type=click.Path(exists=True, path_type=Path),
+    required=False,
+    default=None,
+    help="Helixer input HDF5 file (contains coordinate mapping). "
+    "If not provided, will auto-detect from predictions file location. "
+    "Required for strand-aware prediction retrieval.",
 )
 @click.option(
     "-o",
@@ -948,7 +1629,8 @@ def confidence(
     ctx: click.Context,
     predictions: Path,
     gff: Path,
-    genome: Path,
+    genome: Optional[Path],
+    input_h5: Optional[Path],
     output: Path,
     bed: Optional[Path],
     low_conf_bed: Optional[Path],
@@ -976,13 +1658,19 @@ def confidence(
     Genes are classified as high (>=0.85), medium (>=0.70), or low (<0.70)
     confidence, with specific flags for problematic regions.
 
+    The command requires coordinate mapping information, which can come from:
+    \b
+    - --input-h5: Helixer input HDF5 file (preferred, enables strand-aware mapping)
+    - --genome: Reference FASTA with .fai index (fallback)
+    - Auto-detection: Will look for *_input.h5 alongside *_predictions.h5
+
     For parallel execution, use --region or --scaffold to process a subset
     of genes, and --chunk-id for logging and output organization.
 
     Example:
-        $ helixforge confidence -p predictions.h5 -g genes.gff3 --genome genome.fa -o scores.tsv
-        $ helixforge confidence -p predictions.h5 -g genes.gff3 --genome genome.fa -o scores.tsv --bed scores.bed --distribution-plot dist.html
-        $ helixforge confidence -p predictions.h5 -g genes.gff3 --genome genome.fa --region chr1:1-1000000 --chunk-id chunk_001 -o chunk_001.tsv
+        $ helixforge confidence -p predictions.h5 -g genes.gff3 --input-h5 input.h5 -o scores.tsv
+        $ helixforge confidence -p predictions.h5 -g genes.gff3 -o scores.tsv  # auto-detect input.h5
+        $ helixforge confidence -p predictions.h5 -g genes.gff3 --genome genome.fa -o scores.tsv  # fallback
     """
     from helixforge.core.confidence import (
         ConfidenceCalculator,
@@ -995,7 +1683,6 @@ def confidence(
         GenomicRegion,
         parse_region,
         region_from_scaffold,
-        validate_region,
     )
 
     verbose = ctx.obj.get("verbose", False)
@@ -1005,154 +1692,198 @@ def confidence(
     if chunk_id and not quiet:
         console.print(f"[blue]Chunk ID:[/blue] {chunk_id}")
 
-    # Get FAI path
-    fai_path = genome.with_suffix(genome.suffix + ".fai")
-    if not fai_path.exists():
-        console.print(f"[red]Error:[/red] FAI index not found: {fai_path}")
-        console.print("Run 'samtools faidx' to create the index.")
-        raise SystemExit(1)
+    # Determine coordinate mapping source
+    fai_path = None
+    if genome is not None:
+        fai_path = genome.with_suffix(genome.suffix + ".fai")
+        if not fai_path.exists():
+            console.print(f"[red]Error:[/red] FAI index not found: {fai_path}")
+            console.print("Run 'samtools faidx' to create the index.")
+            raise SystemExit(1)
 
     if not quiet:
         console.print(f"[blue]Loading predictions from:[/blue] {predictions}")
         console.print(f"[blue]Loading genes from:[/blue] {gff}")
-        console.print(f"[blue]Reference genome:[/blue] {genome}")
+        if input_h5:
+            console.print(f"[blue]Helixer input file:[/blue] {input_h5}")
+        elif genome:
+            console.print(f"[blue]Reference genome:[/blue] {genome}")
+        else:
+            console.print("[blue]Coordinate mapping:[/blue] auto-detect from predictions path")
 
     try:
-        # Load data
-        with HelixerHDF5Reader(predictions, fai_path) as reader:
-            with GenomeAccessor(genome) as genome_accessor:
-                # Parse region constraints
-                target_region: GenomicRegion | None = None
+        # Load HDF5 reader with appropriate coordinate mapping
+        reader = HelixerHDF5Reader(
+            predictions,
+            fasta_index=fai_path,
+            input_h5_path=input_h5,
+        )
 
-                if region:
-                    try:
-                        target_region = parse_region(region)
-                        validate_region(target_region, genome_accessor)
-                        if not quiet:
-                            console.print(f"[blue]Processing region:[/blue] {target_region}")
-                    except ValueError as e:
-                        console.print(f"[red]Error:[/red] {e}")
-                        raise SystemExit(1)
-                elif scaffold:
-                    # Scaffold-only mode: process entire scaffold
-                    if scaffold not in genome_accessor.scaffold_lengths:
-                        console.print(
-                            f"[red]Error:[/red] Scaffold '{scaffold}' not found in genome"
+        # Get scaffold info from reader's coordinate index
+        scaffold_lengths = reader.coord_index.scaffold_lengths
+
+        if not quiet and reader.has_dual_strand:
+            console.print("[green]Using strand-aware coordinate mapping[/green]")
+
+        # Optionally load genome accessor for validation
+        genome_accessor = None
+        if genome is not None:
+            genome_accessor = GenomeAccessor(genome)
+
+        try:
+            # Parse region constraints
+            target_region: GenomicRegion | None = None
+
+            if region:
+                try:
+                    target_region = parse_region(region)
+                    # Validate against scaffold lengths from reader
+                    if target_region.seqid not in scaffold_lengths:
+                        raise ValueError(f"Scaffold '{target_region.seqid}' not found")
+                    scaffold_len = scaffold_lengths[target_region.seqid]
+                    if target_region.end > scaffold_len:
+                        raise ValueError(
+                            f"Region end ({target_region.end}) exceeds scaffold length ({scaffold_len})"
                         )
-                        raise SystemExit(1)
-                    scaffold_len = genome_accessor.scaffold_lengths[scaffold]
-                    target_region = region_from_scaffold(scaffold, scaffold_len)
                     if not quiet:
-                        console.print(
-                            f"[blue]Processing scaffold:[/blue] {scaffold} "
-                            f"(length: {scaffold_len:,})"
-                        )
-
-                # Load and filter genes
-                parser = GFF3Parser(gff)
-
-                if target_region:
-                    genes = parser.get_genes_in_region(
-                        target_region.seqid,
-                        target_region.start,
-                        target_region.end,
+                        console.print(f"[blue]Processing region:[/blue] {target_region}")
+                except ValueError as e:
+                    console.print(f"[red]Error:[/red] {e}")
+                    raise SystemExit(1)
+            elif scaffold:
+                # Scaffold-only mode: process entire scaffold
+                if scaffold not in scaffold_lengths:
+                    console.print(
+                        f"[red]Error:[/red] Scaffold '{scaffold}' not found. "
+                        f"Available: {list(scaffold_lengths.keys())}"
                     )
-                    if not quiet:
-                        console.print(f"[green]Found {len(genes)} genes in region[/green]")
-                else:
-                    genes = list(parser.iter_genes())
-                    if not quiet:
-                        console.print(f"[green]Loaded {len(genes)} genes[/green]")
-
-                # Handle empty gene list
-                if not genes:
-                    if not quiet:
-                        console.print("[yellow]No genes found in specified region[/yellow]")
-                    # Write empty output with header
-                    ConfidenceWriter.to_tsv([], output)
-                    if not quiet:
-                        console.print(f"[green]Wrote empty TSV to:[/green] {output}")
-                    return
-
-                # Create calculator
-                calc = ConfidenceCalculator(
-                    reader,
-                    genome_accessor,
-                    low_conf_threshold=threshold,
-                )
-
-                # Score genes
+                    raise SystemExit(1)
+                scaffold_len = scaffold_lengths[scaffold]
+                target_region = region_from_scaffold(scaffold, scaffold_len)
                 if not quiet:
                     console.print(
-                        f"[blue]Scoring genes with {threads} thread(s)...[/blue]"
+                        f"[blue]Processing scaffold:[/blue] {scaffold} "
+                        f"(length: {scaffold_len:,})"
                     )
 
-                scores = list(
-                    calc.score_genes_parallel(genes, n_workers=threads)
+            # Load and filter genes
+            parser = GFF3Parser(gff)
+
+            if target_region:
+                genes = parser.get_genes_in_region(
+                    target_region.seqid,
+                    target_region.start,
+                    target_region.end,
+                )
+                if not quiet:
+                    console.print(f"[green]Found {len(genes)} genes in region[/green]")
+            else:
+                genes = list(parser.iter_genes())
+                if not quiet:
+                    console.print(f"[green]Loaded {len(genes)} genes[/green]")
+
+            # Handle empty gene list
+            if not genes:
+                if not quiet:
+                    console.print("[yellow]No genes found in specified region[/yellow]")
+                # Write empty output with header
+                ConfidenceWriter.to_tsv([], output)
+                if not quiet:
+                    console.print(f"[green]Wrote empty TSV to:[/green] {output}")
+                return
+
+            # Create calculator
+            calc = ConfidenceCalculator(
+                reader,
+                genome_accessor,
+                low_conf_threshold=threshold,
+            )
+
+            # Score genes
+            if not quiet:
+                console.print(
+                    f"[blue]Scoring genes with {threads} thread(s)...[/blue]"
                 )
 
-                # Write TSV output
-                ConfidenceWriter.to_tsv(scores, output)
+            scores = list(
+                calc.score_genes_parallel(genes, n_workers=threads)
+            )
+
+            # Write TSV output
+            ConfidenceWriter.to_tsv(scores, output)
+            if not quiet:
+                console.print(f"[green]Wrote TSV to:[/green] {output}")
+
+            # Write BED if requested
+            if bed:
+                ConfidenceWriter.to_bed(scores, bed)
                 if not quiet:
-                    console.print(f"[green]Wrote TSV to:[/green] {output}")
+                    console.print(f"[green]Wrote BED to:[/green] {bed}")
 
-                # Write BED if requested
-                if bed:
-                    ConfidenceWriter.to_bed(scores, bed)
-                    if not quiet:
-                        console.print(f"[green]Wrote BED to:[/green] {bed}")
-
-                # Write low-confidence regions BED if requested
-                if low_conf_bed:
-                    ConfidenceWriter.low_confidence_regions_bed(scores, low_conf_bed)
-                    if not quiet:
-                        console.print(
-                            f"[green]Wrote low-conf regions to:[/green] {low_conf_bed}"
-                        )
-
-                # Generate distribution plot if requested
-                if distribution_plot:
-                    from helixforge.viz.genome import plot_confidence_distribution
-
-                    plot_confidence_distribution(
-                        scores,
-                        output_path=distribution_plot,
-                        format=plot_format,
-                    )
-                    if not quiet:
-                        console.print(
-                            f"[green]Wrote distribution plot to:[/green] {distribution_plot}"
-                        )
-
-                # Generate per-gene plots if requested
-                if plot_dir:
-                    from helixforge.viz.locus import plot_gene_confidence_batch
-
-                    plot_dir.mkdir(parents=True, exist_ok=True)
-                    paths = plot_gene_confidence_batch(
-                        genes,
-                        scores,
-                        plot_dir,
-                        format=plot_format,
-                        calc=calc,
-                    )
-                    if not quiet:
-                        console.print(
-                            f"[green]Generated {len(paths)} gene plots in:[/green] {plot_dir}"
-                        )
-
-                # Print summary
+            # Write low-confidence regions BED if requested
+            if low_conf_bed:
+                ConfidenceWriter.low_confidence_regions_bed(scores, low_conf_bed)
                 if not quiet:
-                    high_count = sum(1 for s in scores if s.confidence_class == "high")
-                    medium_count = sum(
-                        1 for s in scores if s.confidence_class == "medium"
+                    console.print(
+                        f"[green]Wrote low-conf regions to:[/green] {low_conf_bed}"
                     )
-                    low_count = sum(1 for s in scores if s.confidence_class == "low")
 
-                    console.print("\n[bold]Summary:[/bold]")
-                    console.print(f"  [green]High confidence:[/green] {high_count}")
-                    console.print(f"  [yellow]Medium confidence:[/yellow] {medium_count}")
-                    console.print(f"  [red]Low confidence:[/red] {low_count}")
+            # Generate distribution plot if requested
+            if distribution_plot:
+                from helixforge.viz.genome import plot_confidence_distribution
+
+                plot_confidence_distribution(
+                    scores,
+                    output_path=distribution_plot,
+                    format=plot_format,
+                )
+                if not quiet:
+                    console.print(
+                        f"[green]Wrote distribution plot to:[/green] {distribution_plot}"
+                    )
+
+            # Generate per-gene plots if requested
+            if plot_dir:
+                from helixforge.viz.locus import plot_gene_confidence_batch
+
+                # Check if a file exists with the directory name
+                if plot_dir.exists() and not plot_dir.is_dir():
+                    console.print(
+                        f"[red]Error:[/red] '{plot_dir}' exists but is not a directory. "
+                        "Please remove it or use a different --plot-dir path."
+                    )
+                    raise SystemExit(1)
+                plot_dir.mkdir(parents=True, exist_ok=True)
+                paths = plot_gene_confidence_batch(
+                    genes,
+                    scores,
+                    plot_dir,
+                    format=plot_format,
+                    calc=calc,
+                )
+                if not quiet:
+                    console.print(
+                        f"[green]Generated {len(paths)} gene plots in:[/green] {plot_dir}"
+                    )
+
+            # Print summary
+            if not quiet:
+                high_count = sum(1 for s in scores if s.confidence_class == "high")
+                medium_count = sum(
+                    1 for s in scores if s.confidence_class == "medium"
+                )
+                low_count = sum(1 for s in scores if s.confidence_class == "low")
+
+                console.print("\n[bold]Summary:[/bold]")
+                console.print(f"  [green]High confidence:[/green] {high_count}")
+                console.print(f"  [yellow]Medium confidence:[/yellow] {medium_count}")
+                console.print(f"  [red]Low confidence:[/red] {low_count}")
+
+        finally:
+            # Clean up resources
+            if genome_accessor is not None:
+                genome_accessor.close()
+            reader.close()
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -1164,7 +1895,7 @@ def confidence(
 
 
 # =============================================================================
-# splice command
+# splice command (DEPRECATED - use refine instead)
 # =============================================================================
 
 
@@ -1183,13 +1914,32 @@ def confidence(
 )
 @click.option(
     "--rnaseq-bam",
+    type=str,
+    multiple=True,
+    help="RNA-seq BAM file(s) (sorted, indexed). Accepts comma-separated list or can be specified multiple times.",
+)
+@click.option(
+    "--rnaseq-bam-list",
     type=click.Path(exists=True, path_type=Path),
-    help="RNA-seq BAM file (sorted, indexed).",
+    help="File containing BAM paths (one per line).",
 )
 @click.option(
     "--junctions-bed",
+    type=str,
+    multiple=True,
+    help="Junction file(s) in BED or STAR SJ.out.tab format. Comma-separated or repeated.",
+)
+@click.option(
+    "--junctions-list",
     type=click.Path(exists=True, path_type=Path),
-    help="Pre-extracted junctions BED (alternative to BAM).",
+    help="File containing junction file paths (one per line). Supports BED and STAR SJ.out.tab.",
+)
+@click.option(
+    "--min-tissues",
+    default=1,
+    type=int,
+    show_default=True,
+    help="Minimum number of samples/tissues supporting a junction. When >1, --min-reads applies per-sample.",
 )
 @click.option(
     "-o",
@@ -1272,14 +2022,17 @@ def splice(
     ctx: click.Context,
     helixer_gff: Path,
     genome: Path,
-    rnaseq_bam: Optional[Path],
-    junctions_bed: Optional[Path],
+    rnaseq_bam: tuple[str, ...],
+    rnaseq_bam_list: Optional[Path],
+    junctions_bed: tuple[str, ...],
+    junctions_list: Optional[Path],
     output_gff: Path,
     report: Optional[Path],
     corrections_detail: Optional[Path],
     unsupported_bed: Optional[Path],
     max_shift: int,
     min_reads: int,
+    min_tissues: int,
     adjust_boundaries: bool,
     workers: int,
     verbose_flag: bool,
@@ -1287,7 +2040,11 @@ def splice(
     chunk_id: Optional[str],
     scaffold: Optional[str],
 ) -> None:
-    """Refine splice sites using RNA-seq evidence.
+    """[DEPRECATED] Refine splice sites using RNA-seq evidence.
+
+    WARNING: This command is deprecated. Use 'helixforge refine' instead,
+    which combines splice correction, boundary adjustment, confidence scoring,
+    and evidence scoring in a single pipeline.
 
     This command refines splice sites in Helixer gene predictions using
     RNA-seq junction evidence and position weight matrix (PWM) scoring.
@@ -1299,16 +2056,45 @@ def splice(
     - Handle canonical (GT-AG) and non-canonical splice sites
     - Flag genes with no RNA-seq support or conflicting evidence
     - Optionally adjust start/stop codons
+    - Multi-tissue/sample support for improved junction confidence
+
+    \b
+    Multi-BAM Mode:
+    When multiple BAM files are provided (e.g., different tissues), junctions
+    are aggregated across samples. Use --min-tissues to require junction
+    support from multiple samples. In multi-BAM mode, --min-reads applies
+    per-sample when --min-tissues > 1.
 
     For parallel execution, use --region or --scaffold to process a subset
     of genes, and --chunk-id for logging and output organization.
 
-    Example:
+    \b
+    Examples:
+        # Single BAM
         $ helixforge splice --helixer-gff helixer.gff3 --genome genome.fa \\
             --rnaseq-bam rnaseq.bam -o refined.gff3 -r splice_report.tsv
+
+        # Multiple BAMs (multi-tissue)
+        $ helixforge splice --helixer-gff helixer.gff3 --genome genome.fa \\
+            --rnaseq-bam liver.bam --rnaseq-bam brain.bam --rnaseq-bam heart.bam \\
+            --min-tissues 2 --min-reads 3 -o refined.gff3 -r splice_report.tsv
+
+        # Region-based parallel processing
         $ helixforge splice --helixer-gff helixer.gff3 --genome genome.fa \\
             --rnaseq-bam rnaseq.bam --region chr1:1-1000000 --chunk-id chunk_001 -o chunk_001.gff3
     """
+    import warnings
+    warnings.warn(
+        "The 'splice' command is deprecated. Use 'helixforge refine' instead, "
+        "which combines splice correction, confidence scoring, and evidence scoring.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    console.print(
+        "[yellow]Warning:[/yellow] The 'splice' command is deprecated. "
+        "Use 'helixforge refine' for full refinement pipeline."
+    )
+
     from helixforge.core.boundaries import BoundaryAdjuster
     from helixforge.core.splice import (
         SpliceRefiner,
@@ -1330,20 +2116,111 @@ def splice(
     if chunk_id and not quiet:
         console.print(f"[blue]Chunk ID:[/blue] {chunk_id}")
 
-    # Validate inputs
-    if not rnaseq_bam and not junctions_bed:
+    # Expand and validate BAM paths
+    # Supports: repeated flags, comma-separated, and file list
+    bam_paths: list[Path] = []
+
+    # Process --rnaseq-bam arguments (may contain comma-separated values)
+    for bam_arg in rnaseq_bam:
+        # Split by comma, handling potential whitespace
+        for bam_str in bam_arg.split(","):
+            bam_str = bam_str.strip()
+            if bam_str:
+                bam_path = Path(bam_str)
+                if not bam_path.exists():
+                    console.print(f"[red]Error:[/red] BAM file not found: {bam_path}")
+                    raise SystemExit(1)
+                bam_paths.append(bam_path)
+
+    # Process --rnaseq-bam-list file
+    if rnaseq_bam_list:
+        with open(rnaseq_bam_list) as f:
+            for line in f:
+                line = line.strip()
+                # Skip empty lines and comments
+                if line and not line.startswith("#"):
+                    bam_path = Path(line)
+                    if not bam_path.exists():
+                        console.print(
+                            f"[red]Error:[/red] BAM file not found: {bam_path} "
+                            f"(from {rnaseq_bam_list})"
+                        )
+                        raise SystemExit(1)
+                    bam_paths.append(bam_path)
+
+    # Expand and validate junction file paths
+    # Supports: repeated flags, comma-separated, and file list
+    junction_paths: list[Path] = []
+
+    # Process --junctions-bed arguments (may contain comma-separated values)
+    for junc_arg in junctions_bed:
+        for junc_str in junc_arg.split(","):
+            junc_str = junc_str.strip()
+            if junc_str:
+                junc_path = Path(junc_str)
+                if not junc_path.exists():
+                    console.print(f"[red]Error:[/red] Junction file not found: {junc_path}")
+                    raise SystemExit(1)
+                junction_paths.append(junc_path)
+
+    # Process --junctions-list file
+    if junctions_list:
+        with open(junctions_list) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    junc_path = Path(line)
+                    if not junc_path.exists():
+                        console.print(
+                            f"[red]Error:[/red] Junction file not found: {junc_path} "
+                            f"(from {junctions_list})"
+                        )
+                        raise SystemExit(1)
+                    junction_paths.append(junc_path)
+
+    # Validate inputs - need at least one source
+    if not bam_paths and not junction_paths:
         console.print(
-            "[red]Error:[/red] Provide either --rnaseq-bam or --junctions-bed"
+            "[red]Error:[/red] Provide --rnaseq-bam, --rnaseq-bam-list, "
+            "--junctions-bed, or --junctions-list"
+        )
+        raise SystemExit(1)
+
+    # Validate min-tissues (applies to whichever input type is provided)
+    n_samples = len(bam_paths) if bam_paths else len(junction_paths)
+    if min_tissues > 1 and n_samples < 2:
+        console.print(
+            "[red]Error:[/red] --min-tissues > 1 requires multiple input files"
         )
         raise SystemExit(1)
 
     if not quiet:
         console.print(f"[blue]Loading GFF from:[/blue] {helixer_gff}")
         console.print(f"[blue]Reference genome:[/blue] {genome}")
-        if rnaseq_bam:
-            console.print(f"[blue]RNA-seq BAM:[/blue] {rnaseq_bam}")
-        if junctions_bed:
-            console.print(f"[blue]Junctions BED:[/blue] {junctions_bed}")
+        if bam_paths:
+            if len(bam_paths) == 1:
+                console.print(f"[blue]RNA-seq BAM:[/blue] {bam_paths[0]}")
+            else:
+                console.print(f"[blue]RNA-seq BAMs:[/blue] {len(bam_paths)} files")
+                for bam in bam_paths:
+                    console.print(f"  - {bam.name}")
+                if min_tissues > 1:
+                    console.print(
+                        f"[blue]Min tissues:[/blue] {min_tissues} "
+                        f"(--min-reads={min_reads} applied per-sample)"
+                    )
+        if junction_paths:
+            if len(junction_paths) == 1:
+                console.print(f"[blue]Junctions file:[/blue] {junction_paths[0]}")
+            else:
+                console.print(f"[blue]Junction files:[/blue] {len(junction_paths)} files")
+                for jp in junction_paths:
+                    console.print(f"  - {jp.name}")
+                if min_tissues > 1:
+                    console.print(
+                        f"[blue]Min tissues:[/blue] {min_tissues} "
+                        f"(--min-reads={min_reads} applied per-sample)"
+                    )
 
     try:
         # Load genome
@@ -1379,36 +2256,135 @@ def splice(
                 )
 
         # Extract junctions
-        if rnaseq_bam:
-            from helixforge.io.bam import JunctionExtractor
+        if bam_paths:
+            if len(bam_paths) == 1:
+                # Single BAM mode - original behavior
+                from helixforge.io.bam import JunctionExtractor
 
-            if not quiet:
-                console.print("[blue]Extracting junctions from BAM...[/blue]")
-            extractor = JunctionExtractor(rnaseq_bam)
+                if not quiet:
+                    console.print("[blue]Extracting junctions from BAM...[/blue]")
+                extractor = JunctionExtractor(bam_paths[0])
 
-            if target_region:
-                # Extract only for the target region
-                junctions = {
-                    target_region.seqid: extractor.extract_region(
+                if target_region:
+                    junctions = {
+                        target_region.seqid: extractor.extract_region(
+                            target_region.seqid,
+                            target_region.start,
+                            target_region.end,
+                            min_reads=min_reads,
+                        )
+                    }
+                else:
+                    junctions = extractor.extract_all(min_reads=min_reads)
+
+                extractor.close()
+
+                if not quiet:
+                    n_junctions = sum(len(j) for j in junctions.values())
+                    console.print(f"[green]Extracted {n_junctions} junctions[/green]")
+            else:
+                # Multi-BAM mode - aggregate across samples
+                from helixforge.io.bam import (
+                    aggregate_junctions_multi_sample,
+                    multi_sample_to_standard_junctions,
+                )
+
+                if not quiet:
+                    console.print(
+                        f"[blue]Extracting and aggregating junctions from "
+                        f"{len(bam_paths)} BAM files...[/blue]"
+                    )
+
+                # Prepare region tuple if needed
+                region_tuple = None
+                if target_region:
+                    region_tuple = (
                         target_region.seqid,
                         target_region.start,
                         target_region.end,
-                        min_reads=min_reads,
                     )
-                }
-            else:
-                junctions = extractor.extract_all(min_reads=min_reads)
 
-            if not quiet:
-                n_junctions = sum(len(j) for j in junctions.values())
-                console.print(f"[green]Extracted {n_junctions} junctions[/green]")
+                # When min_tissues > 1, min_reads applies per-sample
+                # Otherwise, we use min_reads=1 per-sample and filter on total
+                if min_tissues > 1:
+                    min_reads_per_sample = min_reads
+                    min_reads_total = 1  # Will be filtered by min_samples
+                else:
+                    min_reads_per_sample = 1
+                    min_reads_total = min_reads
+
+                multi_junctions = aggregate_junctions_multi_sample(
+                    bam_paths=bam_paths,
+                    min_reads_per_sample=min_reads_per_sample,
+                    min_samples=min_tissues,
+                    region=region_tuple,
+                )
+
+                # Convert to standard junctions for SpliceRefiner
+                junctions = multi_sample_to_standard_junctions(multi_junctions)
+
+                # Apply total read filter if min_tissues == 1
+                if min_tissues == 1 and min_reads_total > 1:
+                    junctions = {
+                        seqid: [j for j in juncs if j.read_count >= min_reads_total]
+                        for seqid, juncs in junctions.items()
+                    }
+                    junctions = {k: v for k, v in junctions.items() if v}
+
+                if not quiet:
+                    n_junctions = sum(len(j) for j in junctions.values())
+                    n_samples = len(bam_paths)
+                    console.print(
+                        f"[green]Aggregated {n_junctions} junctions from "
+                        f"{n_samples} samples[/green]"
+                    )
+                    if min_tissues > 1:
+                        console.print(
+                            f"[green]  (requiring >= {min_tissues} tissues with "
+                            f">= {min_reads} reads each)[/green]"
+                        )
         else:
-            # Load from BED
-            from helixforge.io.bam import load_junctions_from_bed
+            # Load from junction files (BED or STAR SJ.out.tab)
+            from helixforge.io.bam import (
+                aggregate_junctions_from_files,
+                load_junctions_auto,
+                multi_sample_to_standard_junctions,
+            )
 
-            if not quiet:
-                console.print("[blue]Loading junctions from BED...[/blue]")
-            all_junctions = load_junctions_from_bed(junctions_bed)
+            if len(junction_paths) == 1:
+                # Single file mode
+                if not quiet:
+                    console.print("[blue]Loading junctions from file...[/blue]")
+                all_junctions = load_junctions_auto(junction_paths[0], min_reads=min_reads)
+            else:
+                # Multi-file mode - aggregate across samples
+                if not quiet:
+                    console.print(
+                        f"[blue]Loading and aggregating junctions from "
+                        f"{len(junction_paths)} files...[/blue]"
+                    )
+
+                if min_tissues > 1:
+                    min_reads_per_sample = min_reads
+                    min_reads_total = 1
+                else:
+                    min_reads_per_sample = 1
+                    min_reads_total = min_reads
+
+                multi_junctions = aggregate_junctions_from_files(
+                    file_paths=junction_paths,
+                    min_reads_per_sample=min_reads_per_sample,
+                    min_samples=min_tissues,
+                )
+                all_junctions = multi_sample_to_standard_junctions(multi_junctions)
+
+                # Apply total read filter if min_tissues == 1
+                if min_tissues == 1 and min_reads_total > 1:
+                    all_junctions = {
+                        seqid: [j for j in juncs if j.read_count >= min_reads_total]
+                        for seqid, juncs in all_junctions.items()
+                    }
+                    all_junctions = {k: v for k, v in all_junctions.items() if v}
 
             if target_region:
                 # Filter junctions to region
@@ -1427,7 +2403,18 @@ def splice(
 
             if not quiet:
                 n_junctions = sum(len(j) for j in junctions.values())
-                console.print(f"[green]Loaded {n_junctions} junctions[/green]")
+                if len(junction_paths) == 1:
+                    console.print(f"[green]Loaded {n_junctions} junctions[/green]")
+                else:
+                    console.print(
+                        f"[green]Aggregated {n_junctions} junctions from "
+                        f"{len(junction_paths)} files[/green]"
+                    )
+                    if min_tissues > 1:
+                        console.print(
+                            f"[green]  (requiring >= {min_tissues} samples with "
+                            f">= {min_reads} reads each)[/green]"
+                        )
 
         # Load and filter genes
         parser = GFF3Parser(helixer_gff)
@@ -1645,7 +2632,7 @@ def parallel():
     Recommended workflow:
         1. Create a chunk plan: helixforge parallel plan
         2. Generate task file: helixforge parallel tasks
-        3. Execute with HyperShell: hs launch --parallelism 32 < tasks.txt
+        3. Execute with HyperShell: hs cluster tasks.txt --num-tasks 32
         4. Aggregate results: helixforge parallel aggregate
     """
     pass
@@ -1826,13 +2813,13 @@ def generate_tasks(
     coordinates are converted automatically.
 
     Examples:
-        # Simple task file
+        # Simple task file (include all required options for your command)
         $ helixforge parallel tasks --chunk-plan chunks.json \\
-            --command 'helixforge confidence --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o {output_dir}/{chunk_id}.tsv' \\
+            --command 'helixforge confidence -p predictions.h5 -g predictions.gff3 --genome genome.fa --chunk-id {chunk_id} --region {seqid}:{start}-{end} -o {output_dir}/{chunk_id}.tsv' \\
             --output tasks.txt --output-dir outputs/
 
         # Execute with HyperShell
-        $ hs launch --parallelism 32 < tasks.txt
+        $ hs cluster tasks.txt --num-tasks 32
 
         # Execute with GNU Parallel
         $ parallel -j 32 < tasks.txt

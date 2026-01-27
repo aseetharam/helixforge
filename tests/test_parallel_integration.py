@@ -21,9 +21,6 @@ from helixforge.parallel import (
     GenomicChunk,
     ParallelExecutor,
     ExecutorBackend,
-    SlurmConfig,
-    SlurmArrayJob,
-    SlurmJobGenerator,
     merge_overlapping_results,
     suggest_chunk_parameters,
     get_optimal_workers,
@@ -239,79 +236,23 @@ class TestPlanPersistence:
 # =============================================================================
 # SLURM Job Generation Integration
 # =============================================================================
+# NOTE: The SlurmJobGenerator, SlurmConfig, SlurmArrayJob classes were removed
+# in favor of task-file-based parallelization (TaskGenerator). These tests are
+# kept as placeholders but skipped. See helixforge.parallel.taskgen for the
+# current approach.
 
 
+@pytest.mark.skip(reason="SlurmJobGenerator removed - use TaskGenerator instead")
 class TestSlurmGenerationIntegration:
-    """Tests for SLURM job generation integration."""
+    """Tests for SLURM job generation integration (DEPRECATED)."""
 
     def test_full_slurm_workflow(self, mock_genome, mock_gff_parser, tmp_path):
         """Test complete SLURM job generation workflow."""
-        # Create job generator
-        generator = SlurmJobGenerator(
-            genome=mock_genome,
-            gff_parser=mock_gff_parser,
-            work_dir=tmp_path / "slurm",
-            config=SlurmConfig(
-                partition="normal",
-                time="4:00:00",
-                memory_gb=16,
-                modules=["python/3.10"],
-                conda_env="helixforge",
-            ),
-        )
-
-        # Generate splice job
-        job = generator.generate_splice_job(
-            helixer_gff=tmp_path / "predictions.gff3",
-            rnaseq_bam=tmp_path / "rnaseq.bam",
-            output_dir=tmp_path / "output",
-            chunk_strategy="scaffold",
-        )
-
-        # Generate files
-        files = job.generate()
-
-        # Verify all files created
-        assert files["chunk_plan"].exists()
-        assert files["submit_script"].exists()
-        assert files["task_script"].exists()
-        assert files["aggregate_script"].exists()
-
-        # Verify chunk plan matches expectations
-        with open(files["chunk_plan"]) as f:
-            plan_data = json.load(f)
-        assert plan_data["n_chunks"] == 5  # 5 scaffolds
-
-        # Verify submit script content
-        submit_content = files["submit_script"].read_text()
-        assert "module load python/3.10" in submit_content
-        assert "conda activate helixforge" in submit_content
-        assert "#SBATCH --array=0-4" in submit_content  # 5 tasks
+        pass
 
     def test_slurm_with_adaptive_chunking(self, mock_genome, mock_gff_parser, tmp_path):
         """Test SLURM with adaptive chunking strategy."""
-        generator = SlurmJobGenerator(
-            genome=mock_genome,
-            gff_parser=mock_gff_parser,
-            work_dir=tmp_path / "slurm",
-        )
-
-        # Generate job with adaptive chunking
-        job = generator.generate_full_pipeline_job(
-            helixer_h5=tmp_path / "pred.h5",
-            helixer_gff=tmp_path / "pred.gff3",
-            rnaseq_bam=tmp_path / "rna.bam",
-            proteins=tmp_path / "prot.fa",
-            output_dir=tmp_path / "output",
-            chunk_strategy="adaptive",
-        )
-
-        files = job.generate()
-
-        # Verify pipeline commands in task script
-        task_content = files["task_script"].read_text()
-        assert "helixforge confidence" in task_content
-        assert "helixforge splice" in task_content
+        pass
 
 
 # =============================================================================
@@ -346,34 +287,12 @@ class TestErrorHandlingIntegration:
         assert len(failed) == 1
         assert "chr3" in failed[0].chunk_id or "Simulated failure" in failed[0].error
 
+    @pytest.mark.skip(reason="aggregate_chunk_outputs removed - use CLI aggregate command")
     def test_result_aggregation_with_missing(self, tmp_path):
         """Test aggregation handles missing chunks gracefully."""
-        from helixforge.parallel.slurm import aggregate_chunk_outputs
-
-        output_dir = tmp_path / "outputs"
-        output_dir.mkdir()
-
-        # Only create 2 of 3 expected outputs
-        (output_dir / "chunk_0000.gff3").write_text(
-            "chr1\ttest\tgene\t1\t100\t.\t+\t.\tID=gene1\n"
-        )
-        (output_dir / "chunk_0002.gff3").write_text(
-            "chr2\ttest\tgene\t1\t100\t.\t+\t.\tID=gene2\n"
-        )
-        # chunk_0001 missing
-
-        output_file = tmp_path / "combined.gff3"
-        aggregate_chunk_outputs(
-            output_dir,
-            "*.gff3",
-            output_file,
-            aggregation_type="merge_gff",
-        )
-
-        # Should still combine available files
-        content = output_file.read_text()
-        assert "gene1" in content
-        assert "gene2" in content
+        # NOTE: aggregate_chunk_outputs was removed. Use the CLI command instead:
+        # helixforge parallel aggregate --input-dir outputs/ --pattern '*.gff3' -o combined.gff3
+        pass
 
 
 # =============================================================================
@@ -537,21 +456,32 @@ class TestModuleImports:
         assert Executor is ParallelExecutor
 
     def test_slurm_imports(self):
-        """Test SLURM module imports."""
+        """Test SLURM utility imports (minimal utilities only)."""
+        # NOTE: SlurmJobGenerator, SlurmConfig, SlurmArrayJob were removed.
+        # The parallel module now uses task-file-based approach with TaskGenerator.
+        # Only minimal SLURM utilities remain for environment detection.
         from helixforge.parallel import (
-            SlurmArrayJob,
-            SlurmConfig,
-            SlurmJobGenerator,
-            SlurmJobConfig,
-            SlurmSubmitter,
-            aggregate_chunk_outputs,
-            check_job_status,
             detect_slurm_environment,
             get_chunk_for_task,
             get_slurm_task_id,
+            get_slurm_resources,
             is_slurm_job,
+            write_example_sbatch,
         )
 
-        assert SlurmConfig is not None
-        assert SlurmJobConfig is SlurmConfig
-        assert SlurmSubmitter is SlurmJobGenerator
+        assert detect_slurm_environment is not None
+        assert is_slurm_job is not None
+
+    def test_taskgen_imports(self):
+        """Test task generator module imports."""
+        from helixforge.parallel import (
+            TaskFile,
+            TaskGenerator,
+            format_command,
+            generate_simple_task_file,
+            estimate_parallelism,
+            generate_hypershell_command,
+        )
+
+        assert TaskGenerator is not None
+        assert format_command is not None
