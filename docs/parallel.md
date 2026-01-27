@@ -36,7 +36,7 @@ helixforge parallel aggregate --input-dir outputs/ --pattern '*.tsv' -o combined
 
 ## Chunk-Aware Commands
 
-The core HelixForge commands (`confidence` and `splice`) support chunk-aware processing through these flags:
+The core HelixForge commands (`confidence`, `refine`, and `evidence`) support chunk-aware processing through these flags:
 
 - `--region seqid:start-end` - Process only genes in this region (1-based inclusive coordinates)
 - `--scaffold name` - Process only genes on this scaffold (simpler alternative to --region)
@@ -84,14 +84,15 @@ helixforge parallel tasks \
     --output-dir outputs/
 ```
 
-### Splice Refinement
+### Gene Refinement (Main Pipeline)
 
 ```bash
 # Single BAM file
 helixforge parallel tasks \
     --chunk-plan chunks.json \
-    --command "helixforge splice \
-        --helixer-gff predictions.gff3 \
+    --command "helixforge refine \
+        -p predictions.h5 \
+        -g predictions.gff3 \
         --genome genome.fa \
         --rnaseq-bam rnaseq.bam \
         --region {seqid}:{start}-{end} \
@@ -104,8 +105,9 @@ helixforge parallel tasks \
 # Multiple BAM files (multi-tissue)
 helixforge parallel tasks \
     --chunk-plan chunks.json \
-    --command "helixforge splice \
-        --helixer-gff predictions.gff3 \
+    --command "helixforge refine \
+        -p predictions.h5 \
+        -g predictions.gff3 \
         --genome genome.fa \
         --rnaseq-bam liver.bam,brain.bam,heart.bam \
         --min-tissues 2 \
@@ -120,8 +122,9 @@ helixforge parallel tasks \
 # Using a BAM list file
 helixforge parallel tasks \
     --chunk-plan chunks.json \
-    --command "helixforge splice \
-        --helixer-gff predictions.gff3 \
+    --command "helixforge refine \
+        -p predictions.h5 \
+        -g predictions.gff3 \
         --genome genome.fa \
         --rnaseq-bam-list tissue_bams.txt \
         --min-tissues 2 \
@@ -134,8 +137,9 @@ helixforge parallel tasks \
 # Using STAR SJ.out.tab junction files
 helixforge parallel tasks \
     --chunk-plan chunks.json \
-    --command "helixforge splice \
-        --helixer-gff predictions.gff3 \
+    --command "helixforge refine \
+        -p predictions.h5 \
+        -g predictions.gff3 \
         --genome genome.fa \
         --junctions-bed sample1_SJ.out.tab,sample2_SJ.out.tab,sample3_SJ.out.tab \
         --min-tissues 2 \
@@ -279,7 +283,7 @@ helixforge parallel tasks --chunk-plan chunks.json \
     --wrapper wrapper.sh \
     --wrapper-setup 'module load python/3.10' \
     --wrapper-setup 'conda activate helixforge' \
-    --command 'helixforge splice --helixer-gff predictions.gff3 --genome genome.fa --rnaseq-bam rnaseq.bam --region ${SEQID}:${START}-${END} -o ${OUTPUT_DIR}/${CHUNK_ID}.gff3' \
+    --command 'helixforge refine -p predictions.h5 -g predictions.gff3 --genome genome.fa --rnaseq-bam rnaseq.bam --region ${SEQID}:${START}-${END} -o ${OUTPUT_DIR}/${CHUNK_ID}.gff3' \
     --output tasks.txt
 ```
 
@@ -466,8 +470,7 @@ TaskGenerator.generate_wrapper_script(
     output_path="wrapper.sh",
     chunk_plan_path="chunks.json",
     commands=[
-        "helixforge confidence -p predictions.h5 -g predictions.gff3 --genome genome.fa --region ${SEQID}:${START}-${END} -o ${OUTPUT_DIR}/${CHUNK_ID}_conf.tsv",
-        "helixforge splice --helixer-gff predictions.gff3 --genome genome.fa --rnaseq-bam liver.bam,brain.bam,heart.bam --min-tissues 2 --region ${SEQID}:${START}-${END} -o ${OUTPUT_DIR}/${CHUNK_ID}.gff3",
+        "helixforge refine -p predictions.h5 -g predictions.gff3 --genome genome.fa --rnaseq-bam liver.bam,brain.bam,heart.bam --min-tissues 2 --region ${SEQID}:${START}-${END} -o ${OUTPUT_DIR}/${CHUNK_ID}.gff3 -r ${OUTPUT_DIR}/${CHUNK_ID}.tsv",
     ],
     setup_commands=[
         "module load python/3.10",

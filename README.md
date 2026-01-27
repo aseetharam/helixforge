@@ -8,9 +8,8 @@ HelixForge takes raw gene predictions from [Helixer](https://github.com/weberlab
 
 - **RNA-seq evidence** for splice site validation and coverage-based confidence
 - **Homology validation** against protein databases
-- **Confidence scoring** with transparent, multi-factor metrics
-- **Isoform reconstruction** from empirical splice junction data
-- **Quality control** with comprehensive reports and filtering
+- **Confidence scoring** with transparent, multi-factor metrics from HDF5 predictions
+- **Quality control** with comprehensive reports and tiered filtering
 
 ## Installation
 
@@ -33,48 +32,118 @@ HelixForge requires Python 3.10 or later and depends on:
 ## Quick Start
 
 ```bash
-# Refine Helixer predictions with RNA-seq evidence
+# Main workflow: refine Helixer predictions with RNA-seq evidence
 helixforge refine \
-    --predictions helixer_output.h5 \
+    -p helixer_predictions.h5 \
+    -g helixer_predictions.gff3 \
     --genome genome.fa \
-    --bam rnaseq.bam \
-    --output refined_genes.gff3
+    --rnaseq-bam rnaseq.bam \
+    -o refined.gff3 \
+    -r refine_report.tsv
 
-# Generate QC report
-helixforge qc \
-    --gff refined_genes.gff3 \
-    --output qc_report.html
+# Validate with protein homology
+helixforge homology extract-proteins --gff refined.gff3 --genome genome.fa -o proteins.fa
+helixforge homology search --proteins proteins.fa --database swissprot.dmnd -o hits.tsv
+helixforge homology validate --search-results hits.tsv --gff refined.gff3 -o validation.tsv
+
+# Aggregate QC results and generate report
+helixforge qc aggregate --refine-tsv refine_report.tsv --homology-tsv validation.tsv -o qc.tsv
+helixforge qc report --qc-tsv qc.tsv -o qc_report.html
+
+# Create tiered output GFF files
+helixforge qc tiered-output --qc-results qc.tsv --gff refined.gff3 -o tiered/
 ```
 
-> **Note**: Full functionality is under active development. See the roadmap below.
+## Available Commands
 
-## Feature Roadmap
+```
+helixforge
+├── refine        # Main pipeline - splice correction, boundaries, confidence, evidence
+├── confidence    # Standalone confidence scoring from HDF5
+├── evidence      # Standalone RNA-seq evidence scoring
+├── homology      # Protein homology validation
+│   ├── extract-proteins
+│   ├── search
+│   └── validate
+├── validate      # Quick protein validation (all-in-one)
+├── qc            # Quality control and reporting
+│   ├── aggregate
+│   ├── report
+│   ├── filter
+│   ├── tiered-output
+│   └── list-flags
+├── parallel      # Large genome parallelization
+│   ├── plan
+│   ├── tasks
+│   ├── aggregate
+│   └── suggest
+└── viz           # Visualization (optional)
+```
 
-### v0.1.0 (Current Development)
-- [ ] Core data structures for gene models
-- [ ] GFF3/FASTA/HDF5 I/O
-- [ ] Basic confidence scoring
-- [ ] CLI skeleton
-- [ ] QC flag definitions
+## Pipeline Diagram
 
-### v0.2.0 (Planned)
-- [ ] RNA-seq evidence integration
-- [ ] Splice junction extraction
-- [ ] Gene boundary refinement
-- [ ] Merge/split detection
-- [ ] HTML QC reports
-
-### v0.3.0 (Future)
-- [ ] Isoform reconstruction
-- [ ] Homology validation
-- [ ] Interactive visualization
-- [ ] SLURM cluster support
+```
+                          ┌─────────────────────┐
+                          │   Helixer Output    │
+                          │  predictions.h5     │
+                          │  predictions.gff3   │
+                          └──────────┬──────────┘
+                                     │
+                                     │  + RNA-seq BAM(s)
+                                     ▼
+                          ┌─────────────────────┐
+                          │       refine        │
+                          │  (main pipeline)    │
+                          │                     │
+                          │ • Splice correction │
+                          │ • Boundary adjust   │
+                          │ • Confidence score  │
+                          │ • Evidence score    │
+                          └──────────┬──────────┘
+                                     │
+                                     ▼
+                          ┌─────────────────────┐
+                          │   homology validate │
+                          │ (protein homology)  │
+                          └──────────┬──────────┘
+                                     │
+                                     ▼
+                          ┌─────────────────────┐
+                          │    qc aggregate     │
+                          │    qc report        │
+                          └──────────┬──────────┘
+                                     │
+                                     ▼
+                          ┌─────────────────────┐
+                          │   qc tiered-output  │
+                          │   (final GFFs)      │
+                          └─────────────────────┘
+```
 
 ## Documentation
 
-Full documentation is available at [docs/](docs/) (coming soon).
+- [Workflow Guide](docs/workflow.md) - Complete step-by-step workflow
+- [Refine Pipeline](docs/refine.md) - Main refinement pipeline details
+- [Evidence Scoring](docs/evidence.md) - RNA-seq evidence scoring
+- [Parallel Execution](docs/parallel.md) - HPC parallelization guide
 
 For development guidelines, see [GUIDE.md](GUIDE.md).
+
+## Development Status
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 0 | Project scaffold | COMPLETE |
+| 1 | I/O Foundation | COMPLETE |
+| 2 | Confidence Scoring | COMPLETE |
+| 3 | Splice Refinement | COMPLETE |
+| 4 | Parallel Execution | COMPLETE |
+| 5 | Homology Pipeline | COMPLETE |
+| 6 | QC System | COMPLETE |
+| 7 | Visualization | PENDING |
+| 8 | CLI Integration | COMPLETE |
+| 9 | Testing/Documentation | IN PROGRESS |
+| 10 | Isoform Support (v0.2) | PENDING |
 
 ## Contributing
 

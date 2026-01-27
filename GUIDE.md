@@ -359,6 +359,7 @@ pytest tests/test_confidence.py -v
 ## Commands Reference
 
 ### Development Setup
+
 ```bash
 # Clone and install
 git clone https://github.com/aseetharam/helixforge.git
@@ -377,62 +378,88 @@ mypy src/helixforge
 ```
 
 ### CLI Commands
-```bash
-# Main refinement pipeline
-helixforge refine --predictions helixer.h5 --genome genome.fa --output refined.gff3
 
-# Splice site refinement - single BAM
-helixforge splice \
-    --helixer-gff predictions.gff3 \
+```bash
+# Main refinement pipeline (recommended)
+helixforge refine \
+    -p helixer_predictions.h5 \
+    -g helixer_predictions.gff3 \
     --genome genome.fa \
     --rnaseq-bam rnaseq.bam \
-    --output-gff refined.gff3 \
-    --report splice_report.tsv \
-    --max-shift 15 \
-    --min-reads 3 \
-    --adjust-boundaries \
-    --workers 4
+    -o refined.gff3 \
+    -r refine_report.tsv
 
-# Splice site refinement - multiple BAMs (multi-tissue)
-helixforge splice \
-    --helixer-gff predictions.gff3 \
+# Multi-tissue refinement
+helixforge refine \
+    -p helixer_predictions.h5 \
+    -g helixer_predictions.gff3 \
     --genome genome.fa \
     --rnaseq-bam liver.bam,brain.bam,heart.bam \
     --min-tissues 2 \
     --min-reads 3 \
-    --output-gff refined.gff3 \
-    --report splice_report.tsv
+    -o refined.gff3 \
+    -r refine_report.tsv
 
-# Splice site refinement - BAMs from file list
-helixforge splice \
-    --helixer-gff predictions.gff3 \
+# Standalone confidence scoring (no RNA-seq required)
+helixforge confidence \
+    -p helixer_predictions.h5 \
+    -g helixer_predictions.gff3 \
     --genome genome.fa \
-    --rnaseq-bam-list tissue_bams.txt \
-    --min-tissues 2 \
-    --output-gff refined.gff3
+    -o confidence.tsv
 
-# Splice site refinement - using STAR SJ.out.tab files
-helixforge splice \
-    --helixer-gff predictions.gff3 \
+# Standalone evidence scoring (no HDF5 required)
+helixforge evidence \
+    -g predictions.gff3 \
+    -b rnaseq.bam \
+    -o annotated.gff3 \
+    --report evidence_report.tsv
+
+# Protein extraction and homology search
+helixforge homology extract-proteins \
+    --gff refined.gff3 \
     --genome genome.fa \
-    --junctions-bed sample1_SJ.out.tab,sample2_SJ.out.tab \
-    --min-tissues 2 \
-    --output-gff refined.gff3
+    -o proteins.fa
 
-# Splice site refinement - junction files from list
-helixforge splice \
-    --helixer-gff predictions.gff3 \
+helixforge homology search \
+    --proteins proteins.fa \
+    --database uniprot.dmnd \
+    -o hits.tsv \
+    --threads 16
+
+helixforge homology validate \
+    --search-results hits.tsv \
+    --gff refined.gff3 \
+    -o validation.tsv
+
+# QC aggregation and reporting
+helixforge qc aggregate \
+    --refine-tsv refine_report.tsv \
+    --homology-tsv validation.tsv \
+    -o qc_results.tsv
+
+helixforge qc report \
+    --qc-tsv qc_results.tsv \
+    -o qc_report.html
+
+helixforge qc tiered-output \
+    --qc-results qc_results.tsv \
+    --gff refined.gff3 \
+    -o tiered/
+
+# Parallel processing for large genomes
+helixforge parallel plan \
     --genome genome.fa \
-    --junctions-list star_sj_files.txt \
-    --min-tissues 2 \
-    --output-gff refined.gff3
+    --strategy adaptive \
+    -o chunks.json
 
-# Add RNA-seq evidence
-helixforge add-evidence --gff predictions.gff3 --bam rnaseq.bam --output with_evidence.gff3
+helixforge parallel tasks \
+    --chunk-plan chunks.json \
+    --command 'helixforge refine -p pred.h5 -g pred.gff3 --genome genome.fa --rnaseq-bam rna.bam --region {seqid}:{start}-{end} --chunk-id {chunk_id} -o outputs/{chunk_id}.gff3' \
+    -o tasks.txt
 
-# Generate QC report
-helixforge qc --gff refined.gff3 --output qc_report.html
-
-# Homology validation
-helixforge validate --gff refined.gff3 --proteins uniprot.fa --output validated.gff3
+helixforge parallel aggregate \
+    --input-dir outputs/ \
+    --pattern '*.gff3' \
+    -o combined.gff3 \
+    --type merge_gff
 ```

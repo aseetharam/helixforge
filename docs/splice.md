@@ -1,5 +1,11 @@
 # Splice Site Refinement Guide
 
+> **DEPRECATED**: The standalone `splice` command has been deprecated. Use `helixforge refine` instead, which combines splice correction with boundary adjustment, confidence scoring, and evidence scoring in a single integrated pipeline.
+>
+> See [docs/refine.md](refine.md) and [docs/workflow.md](workflow.md) for the recommended workflow.
+
+---
+
 This document explains the splice site refinement functionality in HelixForge, which uses RNA-seq junction evidence and Position Weight Matrix (PWM) scoring to refine Helixer gene predictions.
 
 ## Overview
@@ -52,9 +58,23 @@ Splice sites are corrected when:
 
 ## Using the CLI
 
-### Basic Usage
+> **Note**: The examples below use the deprecated `splice` command. For new projects, use the `refine` command:
+>
+> ```bash
+> # Recommended: Use the refine command
+> helixforge refine \
+>     -p predictions.h5 \
+>     -g predictions.gff3 \
+>     --genome genome.fa \
+>     --rnaseq-bam rnaseq.bam \
+>     -o refined.gff3 \
+>     -r refine_report.tsv
+> ```
+
+### Basic Usage (DEPRECATED)
 
 ```bash
+# DEPRECATED - use 'helixforge refine' instead
 helixforge splice \
     --helixer-gff predictions.gff3 \
     --genome genome.fa \

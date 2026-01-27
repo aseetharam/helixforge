@@ -156,18 +156,20 @@ The AED score is MAKER-compatible: 0 = perfect support, 1 = no support.
 The output GFF3 includes these attributes on gene features:
 
 ```
-chr1    HelixForge    gene    1000    5000    .    +    .    ID=gene1;confidence=0.9234;evidence_level=full;aed=0.0500;junction_support=1.0000;splice_corrections=2;refine_flags=SPLICE_CORRECTED
+chr1    HelixForge    gene    1000    5000    .    +    .    ID=gene1;confidence_score=0.9234;evidence_score=0.9500;aed=0.0500;junction_support=1.0000;mean_coverage=45.3;flags=SPLICE_CORRECTED
 ```
 
 | Attribute | Description |
 |-----------|-------------|
-| `confidence` | HDF5-based confidence score (0-1) |
-| `evidence_level` | full/partial/minimal/none |
+| `confidence_score` | HDF5-based confidence score (0-1) |
+| `evidence_score` | RNA-seq evidence score (0-1), equals 1 - AED |
 | `aed` | Annotation Edit Distance (0-1, MAKER-compatible) |
 | `junction_support` | Fraction of supported junctions |
-| `splice_corrections` | Number of corrected splice sites |
-| `boundary_adjusted` | yes if boundaries were adjusted |
-| `refine_flags` | Comma-separated quality flags |
+| `mean_coverage` | Mean exon coverage from RNA-seq |
+| `flags` | Comma-separated quality flags |
+| `evidence_level` | Optional: full/partial/minimal/none |
+| `splice_corrections` | Optional: number of corrected splice sites |
+| `boundary_adjusted` | Optional: yes if boundaries were adjusted |
 
 ### Refine Report TSV
 

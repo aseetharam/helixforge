@@ -1,5 +1,7 @@
 # RNA-seq Evidence Scoring Guide
 
+> **Note**: For most workflows, use the `helixforge refine` command which combines evidence scoring with splice correction, boundary adjustment, and confidence scoring. The standalone `evidence` command is useful when you only have RNA-seq data without the Helixer HDF5 predictions file.
+
 This document explains the RNA-seq evidence scoring functionality in HelixForge, which evaluates how well predicted gene models match empirical RNA-seq data.
 
 ## Overview
@@ -17,13 +19,13 @@ The output includes an Annotation Edit Distance (AED) score for each gene, where
 
 ```bash
 # Basic usage
-helixforge add-evidence \
+helixforge evidence \
     -g predictions.gff3 \
     -b rnaseq.bam \
     -o annotated.gff3
 
 # With detailed reports
-helixforge add-evidence \
+helixforge evidence \
     -g predictions.gff3 \
     -b rnaseq.bam \
     -o annotated.gff3 \
@@ -96,7 +98,7 @@ Genes are classified into four evidence levels:
 ### Basic Usage
 
 ```bash
-helixforge add-evidence \
+helixforge evidence \
     -g predictions.gff3 \
     -b rnaseq.bam \
     -o annotated.gff3
@@ -106,13 +108,13 @@ helixforge add-evidence \
 
 ```bash
 # Comma-separated
-helixforge add-evidence \
+helixforge evidence \
     -g predictions.gff3 \
     -b tissue1.bam,tissue2.bam,tissue3.bam \
     -o annotated.gff3
 
 # Repeated flags
-helixforge add-evidence \
+helixforge evidence \
     -g predictions.gff3 \
     -b tissue1.bam \
     -b tissue2.bam \
@@ -120,7 +122,7 @@ helixforge add-evidence \
     -o annotated.gff3
 
 # From file list
-helixforge add-evidence \
+helixforge evidence \
     -g predictions.gff3 \
     --bam-list bam_files.txt \
     -o annotated.gff3
@@ -129,7 +131,7 @@ helixforge add-evidence \
 ### With All Reports
 
 ```bash
-helixforge add-evidence \
+helixforge evidence \
     -g predictions.gff3 \
     -b rnaseq.bam \
     -o annotated.gff3 \
@@ -144,7 +146,7 @@ helixforge add-evidence \
 For faster analysis when only junction support matters:
 
 ```bash
-helixforge add-evidence \
+helixforge evidence \
     -g predictions.gff3 \
     -b rnaseq.bam \
     -o annotated.gff3 \
@@ -296,28 +298,45 @@ Only report high-confidence evidence.
 
 ## Integration with QC Pipeline
 
-Evidence scores integrate with the HelixForge QC system:
+Evidence scores integrate with the HelixForge QC system. The recommended approach is to use the `refine` command which produces a comprehensive report:
 
 ```bash
-# 1. Score evidence
-helixforge add-evidence \
+# Recommended: Use the refine command (includes evidence scoring)
+helixforge refine \
+    -p helixer_predictions.h5 \
     -g predictions.gff3 \
-    -b rnaseq.bam \
-    -o annotated.gff3 \
-    --summary evidence_summary.tsv
+    --genome genome.fa \
+    --rnaseq-bam rnaseq.bam \
+    -o refined.gff3 \
+    -r refine_report.tsv
 
-# 2. Aggregate with other QC results
+# Aggregate with homology results
 helixforge qc aggregate \
-    --gff annotated.gff3 \
-    --confidence confidence.tsv \
-    --splice splice_report.tsv \
-    --evidence evidence_summary.tsv \
+    --refine-tsv refine_report.tsv \
+    --homology-tsv validation.tsv \
     -o qc_aggregated.tsv
 
-# 3. Generate report
+# Generate report
 helixforge qc report \
     --qc-tsv qc_aggregated.tsv \
     -o qc_report.html
+```
+
+If you only have RNA-seq data (no HDF5 predictions), use the standalone `evidence` command:
+
+```bash
+# Standalone evidence scoring (no HDF5 required)
+helixforge evidence \
+    -g predictions.gff3 \
+    -b rnaseq.bam \
+    -o annotated.gff3 \
+    --report evidence_report.tsv
+
+# Aggregate with other results
+helixforge qc aggregate \
+    --evidence-tsv evidence_report.tsv \
+    --homology-tsv validation.tsv \
+    -o qc_aggregated.tsv
 ```
 
 ## API Reference

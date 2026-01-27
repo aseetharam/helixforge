@@ -2,6 +2,32 @@
 
 This guide shows the recommended order of operations for refining Helixer gene predictions into publication-quality annotations.
 
+## Available Commands
+
+```
+helixforge
+├── refine        # Main pipeline (recommended) - combines all refinement steps
+├── confidence    # Standalone confidence scoring from HDF5
+├── evidence      # Standalone RNA-seq evidence scoring
+├── homology      # Protein homology validation
+│   ├── extract-proteins
+│   ├── search
+│   └── validate
+├── validate      # Quick protein validation
+├── qc            # Quality control and reporting
+│   ├── aggregate
+│   ├── report
+│   ├── filter
+│   ├── tiered-output
+│   └── list-flags
+├── parallel      # Large genome parallelization
+│   ├── plan
+│   ├── tasks
+│   ├── aggregate
+│   └── suggest
+└── viz           # Visualization (optional)
+```
+
 ## Quick Reference
 
 ```
@@ -25,7 +51,7 @@ This guide shows the recommended order of operations for refining Helixer gene p
                                      │
                                      ▼
                           ┌─────────────────────┐
-                          │      validate       │
+                          │   homology validate │
                           │ (protein homology)  │
                           └──────────┬──────────┘
                                      │
@@ -41,6 +67,8 @@ This guide shows the recommended order of operations for refining Helixer gene p
                           │   (final GFFs)      │
                           └─────────────────────┘
 ```
+
+---
 
 ## Step-by-Step Workflow
 
@@ -60,7 +88,45 @@ Optional but recommended:
 
 ### Step 1: Refine Gene Predictions (Main Pipeline)
 
-The `refine` command is the primary HelixForge pipeline. It combines splice correction, boundary adjustment, confidence scoring, and evidence scoring into a single integrated workflow.
+The `refine` command is the **primary HelixForge pipeline**. It combines splice correction, boundary adjustment, confidence scoring, and evidence scoring into a single integrated workflow.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     refine Pipeline                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Input: HDF5 + GFF3 + BAM(s)                                    │
+│                    │                                             │
+│                    ▼                                             │
+│  ┌─────────────────────────────┐                                │
+│  │  1. Junction Extraction     │  Extract splice junctions      │
+│  │     from RNA-seq BAMs       │  from all BAM files            │
+│  └─────────────┬───────────────┘                                │
+│                ▼                                                 │
+│  ┌─────────────────────────────┐                                │
+│  │  2. Splice Correction       │  Shift splice sites to match  │
+│  │     (max_shift, min_reads)  │  RNA-seq evidence + PWM       │
+│  └─────────────┬───────────────┘                                │
+│                ▼                                                 │
+│  ┌─────────────────────────────┐                                │
+│  │  3. Boundary Adjustment     │  Find optimal start/stop      │
+│  │     (Kozak context scoring) │  codons in search window      │
+│  └─────────────┬───────────────┘                                │
+│                ▼                                                 │
+│  ┌─────────────────────────────┐                                │
+│  │  4. Confidence Scoring      │  Score from HDF5 softmax      │
+│  │     (from HDF5 predictions) │  probabilities                │
+│  └─────────────┬───────────────┘                                │
+│                ▼                                                 │
+│  ┌─────────────────────────────┐                                │
+│  │  5. Evidence Scoring        │  Calculate AED, junction      │
+│  │     (AED, junction support) │  support ratio, coverage      │
+│  └─────────────┬───────────────┘                                │
+│                ▼                                                 │
+│  Output: Refined GFF3 + Report TSV                              │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 **RNA-seq evidence is required** for this step.
 
@@ -100,40 +166,35 @@ helixforge refine \
 ```
 
 **Key options:**
-- `-p/--helixer-h5` - Helixer HDF5 predictions (required)
-- `-g/--helixer-gff` - Helixer GFF3 predictions (required)
-- `--rnaseq-bam` - BAM file(s), comma-separated or repeated
-- `--rnaseq-bam-list` - File containing BAM paths
-- `--junctions-bed` - Pre-computed junction files (STAR SJ.out.tab)
-- `--max-shift` - Maximum bp to shift splice sites (default: 15)
-- `--min-reads` - Minimum reads for junction support (default: 3)
-- `--min-tissues` - Minimum samples supporting a junction (default: 1)
-- `--adjust-boundaries/--no-adjust-boundaries` - Refine start/stop codons (default: on)
-- `-r/--report` - Output comprehensive refine report TSV
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-p/--helixer-h5` | Helixer HDF5 predictions | Required |
+| `-g/--helixer-gff` | Helixer GFF3 predictions | Required |
+| `--genome` | Reference genome FASTA | Required |
+| `--rnaseq-bam` | BAM file(s), comma-separated | - |
+| `--rnaseq-bam-list` | File containing BAM paths | - |
+| `--junctions-bed` | Pre-computed junction files | - |
+| `--max-shift` | Maximum bp to shift splice sites | 15 |
+| `--min-reads` | Minimum reads for junction support | 3 |
+| `--min-tissues` | Minimum samples supporting junction | 1 |
+| `--adjust-boundaries` | Refine start/stop codons | on |
+| `-r/--report` | Output comprehensive report TSV | - |
 
-**Alternative: Using STAR junction files:**
-
-```bash
-helixforge refine \
-    -p helixer_predictions.h5 \
-    -g helixer_predictions.gff3 \
-    --genome genome.fa \
-    --junctions-bed sample1_SJ.out.tab,sample2_SJ.out.tab \
-    --min-tissues 2 \
-    -o refined.gff3
-```
-
-**Output:**
-- Refined GFF3 with corrected splice sites and quality attributes
-- Report TSV with confidence, evidence, and splice correction metrics
+**Output GFF3 attributes:**
+- `confidence_score` - Overall confidence (0-1)
+- `evidence_score` - RNA-seq evidence score (0-1)
+- `aed` - Annotation Edit Distance (0-1, lower is better)
+- `junction_support` - Fraction of junctions supported
+- `mean_coverage` - Mean exon coverage
+- `flags` - Quality flags
 
 ---
 
 ### Alternative: Standalone Commands
 
-If you don't have RNA-seq data or prefer separate steps, you can use:
+If you don't have RNA-seq data or prefer separate steps:
 
-#### Confidence Scoring Only
+#### Confidence Scoring Only (requires HDF5)
 
 ```bash
 helixforge confidence \
@@ -158,6 +219,32 @@ helixforge evidence \
 ### Step 2: Validate with Protein Homology
 
 Search predicted proteins against a reference database to validate gene models.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   Homology Validation                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────┐    ┌─────────────────┐                     │
+│  │ extract-proteins│───▶│    proteins.fa  │                     │
+│  │  (from GFF)     │    │                 │                     │
+│  └─────────────────┘    └────────┬────────┘                     │
+│                                  │                               │
+│                                  ▼                               │
+│  ┌─────────────────┐    ┌─────────────────┐                     │
+│  │ Reference DB    │───▶│     search      │──▶ hits.tsv        │
+│  │ (UniProt, etc)  │    │  (Diamond/MMseqs)│                    │
+│  └─────────────────┘    └─────────────────┘                     │
+│                                  │                               │
+│                                  ▼                               │
+│                         ┌─────────────────┐                     │
+│                         │    validate     │──▶ validation.tsv   │
+│                         │ (chimera/frag   │                     │
+│                         │  detection)     │                     │
+│                         └─────────────────┘                     │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ```bash
 # Extract proteins from refined predictions
@@ -230,36 +317,11 @@ helixforge qc tiered-output \
 ```
 
 **Output directory contents:**
-
-- `high_confidence.gff3` - Highest quality genes
-- `medium_confidence.gff3` - Moderate quality genes
+- `high_confidence.gff3` - Highest quality genes (conf ≥0.85, no errors)
+- `medium_confidence.gff3` - Moderate quality genes (conf ≥0.70)
 - `low_confidence.gff3` - Lower quality, needs review
-- `rejected.gff3` - Problematic genes
+- `rejected.gff3` - Problematic genes (TE overlap, internal stops)
 - `tier_summary.tsv` - Summary statistics
-
----
-
-### Step 6: Visualize Results (optional)
-
-Inspect specific genes or regions interactively.
-
-```bash
-# Static plot for a gene
-helixforge viz \
-    -g refined.gff3 \
-    --genome genome.fa \
-    --bam rnaseq.bam \
-    --gene GENE_ID \
-    -o gene_plot.png
-
-# Interactive browser
-helixforge viz \
-    -g refined.gff3 \
-    --genome genome.fa \
-    --bam rnaseq.bam \
-    --interactive \
-    --port 8050
-```
 
 ---
 
@@ -274,10 +336,10 @@ helixforge parallel plan \
     --target-size 50000000 \
     -o chunks.json
 
-# 2. Generate task file for confidence scoring
+# 2. Generate task file
 helixforge parallel tasks \
     --chunk-plan chunks.json \
-    --command 'helixforge confidence -p predictions.h5 -g predictions.gff3 --region {seqid}:{start}-{end} --chunk-id {chunk_id} -o outputs/{chunk_id}.tsv' \
+    --command 'helixforge refine -p predictions.h5 -g predictions.gff3 --genome genome.fa --rnaseq-bam rna.bam --region {seqid}:{start}-{end} --chunk-id {chunk_id} -o outputs/{chunk_id}.gff -r outputs/{chunk_id}.tsv' \
     --output tasks.txt \
     --output-dir outputs/
 
@@ -288,17 +350,15 @@ parallel -j 32 < tasks.txt
 
 # 4. Aggregate chunk results
 helixforge parallel aggregate \
-    --chunk-plan chunks.json \
     --input-dir outputs/ \
-    --pattern '*.tsv' \
-    -o confidence_scores.tsv
+    --pattern '*.gff' \
+    -o refined_combined.gff3 \
+    --type merge_gff
 ```
 
 ---
 
 ## Complete Example Pipeline
-
-Here's a complete pipeline script:
 
 ```bash
 #!/bin/bash
@@ -309,65 +369,56 @@ PREDICTIONS_H5="helixer_output/predictions.h5"
 PREDICTIONS_GFF="helixer_output/predictions.gff3"
 GENOME="genome.fa"
 RNASEQ_BAM="rnaseq.bam"
-PROTEINS="uniprot_plants.fa"
+PROTEINS="uniprot_plants.dmnd"
 
 # Output directory
 OUTDIR="helixforge_output"
 mkdir -p "$OUTDIR"
 
-echo "Step 1: Confidence scoring..."
-helixforge confidence \
+echo "Step 1: Refine predictions with RNA-seq evidence..."
+helixforge refine \
     -p "$PREDICTIONS_H5" \
     -g "$PREDICTIONS_GFF" \
-    -o "$OUTDIR/confidence.tsv" \
-    --bed "$OUTDIR/confidence.bed" \
-    -j 4
-
-echo "Step 2: Splice refinement..."
-# For single BAM:
-helixforge splice \
-    --helixer-gff "$PREDICTIONS_GFF" \
     --genome "$GENOME" \
     --rnaseq-bam "$RNASEQ_BAM" \
-    --output-gff "$OUTDIR/splice_refined.gff3" \
-    --report "$OUTDIR/splice_report.tsv" \
-    --adjust-boundaries \
-    --workers 4
+    -o "$OUTDIR/refined.gff3" \
+    -r "$OUTDIR/refine_report.tsv" \
+    --verbose
 
-# For multiple BAMs (multi-tissue), replace above with:
-# helixforge splice \
-#     --helixer-gff "$PREDICTIONS_GFF" \
-#     --genome "$GENOME" \
-#     --rnaseq-bam liver.bam,brain.bam,heart.bam \
-#     --min-tissues 2 --min-reads 3 \
-#     --output-gff "$OUTDIR/splice_refined.gff3" \
-#     --report "$OUTDIR/splice_report.tsv" \
-#     --adjust-boundaries --workers 4
+echo "Step 2: Extract and search proteins..."
+helixforge homology extract-proteins \
+    --gff "$OUTDIR/refined.gff3" \
+    --genome "$GENOME" \
+    -o "$OUTDIR/proteins.fa"
 
-echo "Step 3: Protein homology validation..."
-helixforge validate \
-    -g "$OUTDIR/splice_refined.gff3" \
-    -p "$PROTEINS" \
-    -o "$OUTDIR/validated.gff3" \
-    --tool diamond
+helixforge homology search \
+    --proteins "$OUTDIR/proteins.fa" \
+    --database "$PROTEINS" \
+    -o "$OUTDIR/homology_hits.tsv" \
+    --threads 8
 
-echo "Step 4: QC aggregation..."
+echo "Step 3: Validate with homology..."
+helixforge homology validate \
+    --search-results "$OUTDIR/homology_hits.tsv" \
+    --gff "$OUTDIR/refined.gff3" \
+    -o "$OUTDIR/homology_validation.tsv"
+
+echo "Step 4: Aggregate QC results..."
 helixforge qc aggregate \
-    --gff "$OUTDIR/validated.gff3" \
-    --confidence "$OUTDIR/confidence.tsv" \
-    --splice "$OUTDIR/splice_report.tsv" \
+    --refine-tsv "$OUTDIR/refine_report.tsv" \
+    --homology-tsv "$OUTDIR/homology_validation.tsv" \
     -o "$OUTDIR/qc_aggregated.tsv"
 
-echo "Step 5: Generate report..."
+echo "Step 5: Generate QC report..."
 helixforge qc report \
-    --aggregated "$OUTDIR/qc_aggregated.tsv" \
+    --qc-tsv "$OUTDIR/qc_aggregated.tsv" \
     -o "$OUTDIR/qc_report.html"
 
 echo "Step 6: Create tiered output..."
 helixforge qc tiered-output \
-    --aggregated "$OUTDIR/qc_aggregated.tsv" \
-    --gff "$OUTDIR/validated.gff3" \
-    --output-dir "$OUTDIR/tiered/"
+    --qc-results "$OUTDIR/qc_aggregated.tsv" \
+    --gff "$OUTDIR/refined.gff3" \
+    -o "$OUTDIR/tiered/"
 
 echo "Done! Results in $OUTDIR/"
 ```
@@ -386,36 +437,42 @@ helixforge confidence \
     -o confidence.tsv
 
 # 2. Validate with proteins
-helixforge validate \
-    -g predictions.gff3 \
-    -p proteins.fa \
-    -o validated.gff3
+helixforge homology extract-proteins --gff predictions.gff3 --genome genome.fa -o proteins.fa
+helixforge homology search --proteins proteins.fa --database uniprot.dmnd -o hits.tsv
+helixforge homology validate --search-results hits.tsv --gff predictions.gff3 -o validation.tsv
 
 # 3. QC and filter
 helixforge qc aggregate \
-    --gff validated.gff3 \
-    --confidence confidence.tsv \
+    --confidence-tsv confidence.tsv \
+    --homology-tsv validation.tsv \
     -o qc_aggregated.tsv
 
 helixforge qc tiered-output \
-    --aggregated qc_aggregated.tsv \
-    --gff validated.gff3 \
-    --output-dir tiered/
+    --qc-results qc_aggregated.tsv \
+    --gff predictions.gff3 \
+    -o tiered/
 ```
 
 ---
 
 ## Command Summary
 
-| Step | Command | Purpose |
-|------|---------|---------|
-| 1 | `confidence` | Score genes using Helixer probabilities |
-| 2 | `splice` | Refine splice sites with RNA-seq |
-| 3 | `add-evidence` | Annotate with RNA-seq support |
-| 4 | `validate` | Protein homology validation |
-| 5 | `qc aggregate` | Combine all QC metrics |
-| 6 | `qc report` | Generate HTML report |
-| 7 | `qc tiered-output` | Create quality-filtered GFFs |
-| 8 | `viz` | Visualize genes and evidence |
+| Command | Purpose | Requires |
+|---------|---------|----------|
+| `refine` | **Main pipeline** - splice correction, boundaries, confidence, evidence | HDF5 + BAM |
+| `confidence` | Score genes using Helixer HDF5 probabilities | HDF5 |
+| `evidence` | Score genes using RNA-seq evidence only | BAM |
+| `homology extract-proteins` | Extract protein sequences from GFF | GFF + genome |
+| `homology search` | Search proteins against database | proteins + DB |
+| `homology validate` | Validate genes with homology results | hits TSV |
+| `validate` | Quick protein validation (all-in-one) | GFF + proteins |
+| `qc aggregate` | Combine all QC metrics | TSV files |
+| `qc report` | Generate HTML report | aggregated TSV |
+| `qc tiered-output` | Create quality-filtered GFFs | aggregated TSV + GFF |
+| `qc filter` | Filter genes by criteria | aggregated TSV |
+| `parallel plan` | Create genome chunk plan | genome |
+| `parallel tasks` | Generate task file for parallel execution | chunk plan |
+| `parallel aggregate` | Combine chunked outputs | chunk outputs |
+| `viz` | Visualize genes and evidence | GFF + genome |
 
-**For large genomes:** Use `parallel plan`, `parallel tasks`, and `parallel aggregate` to distribute work.
+**For large genomes:** Use `parallel plan`, `parallel tasks`, and `parallel aggregate` to distribute work across HPC nodes.
