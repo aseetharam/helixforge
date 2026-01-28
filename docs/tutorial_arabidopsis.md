@@ -5,7 +5,7 @@ This tutorial demonstrates a complete HelixForge workflow using *Arabidopsis tha
 ## Overview
 
 | Item | Details |
-|------|---------|
+| ------ | --------- |
 | **Species** | *Arabidopsis thaliana* (TAIR10/Araport11) |
 | **Genome size** | ~135 Mb (5 chromosomes + organelles) |
 | **RNA-seq** | 56 samples, paired-end, 2x76 bp (PRJEB32665) |
@@ -713,7 +713,7 @@ grep -i "error\|warning\|fail" logs/*.log | head -50
 For Arabidopsis thaliana with 56 tissue RNA-seq samples:
 
 | Metric | Expected Range |
-|--------|----------------|
+| -------- | ---------------- |
 | Total predicted genes | 25,000 - 30,000 |
 | High confidence | 60-75% |
 | Medium confidence | 15-25% |
