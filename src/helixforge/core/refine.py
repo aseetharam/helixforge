@@ -486,6 +486,9 @@ class RefinePipeline:
             confidence, evidence, splice_report, boundary_adjusted
         )
 
+        # Step 6: Validate and fix any invalid coordinates
+        self._validate_gene_coordinates(refined_gene)
+
         # Add attributes to gene
         self._add_gene_attributes(refined_gene, confidence, evidence, flags)
 
@@ -562,6 +565,56 @@ class RefinePipeline:
                 results.append(self.refine_gene(gene))
         return results
 
+    def _validate_gene_coordinates(self, gene: "GeneModel") -> None:
+        """Validate and fix any invalid coordinates in the gene model.
+
+        This is a safety check to catch any coordinate issues from splice
+        correction or boundary adjustment. Invalid CDS/exons are filtered out.
+
+        Args:
+            gene: Gene model to validate (modified in place).
+        """
+        for transcript in gene.transcripts:
+            # Filter out invalid exons
+            valid_exons = []
+            for start, end in transcript.exons:
+                if start < end:
+                    valid_exons.append((start, end))
+                else:
+                    logger.warning(
+                        f"Removing invalid exon from {transcript.transcript_id}: "
+                        f"start ({start}) >= end ({end})"
+                    )
+            transcript.exons = valid_exons
+
+            # Filter out invalid CDS
+            valid_cds = []
+            for cds_tuple in transcript.cds:
+                start, end = cds_tuple[0], cds_tuple[1]
+                phase = cds_tuple[2] if len(cds_tuple) > 2 else 0
+                if start < end:
+                    valid_cds.append((start, end, phase))
+                else:
+                    logger.warning(
+                        f"Removing invalid CDS from {transcript.transcript_id}: "
+                        f"start ({start}) >= end ({end})"
+                    )
+            transcript.cds = valid_cds
+
+            # Update transcript bounds
+            if transcript.exons:
+                transcript.start = min(e[0] for e in transcript.exons)
+                transcript.end = max(e[1] for e in transcript.exons)
+
+        # Update gene bounds
+        if gene.transcripts:
+            all_exons = []
+            for tx in gene.transcripts:
+                all_exons.extend(tx.exons)
+            if all_exons:
+                gene.start = min(e[0] for e in all_exons)
+                gene.end = max(e[1] for e in all_exons)
+
     def _aggregate_flags(
         self,
         confidence: "GeneConfidence | None",
@@ -601,6 +654,8 @@ class RefinePipeline:
         # Boundary flag
         if boundary_adjusted:
             flags.append("BOUNDARY_ADJUSTED")
+            # Remove uncertain_boundary since it was addressed by adjustment
+            flags = [f for f in flags if f != "uncertain_boundary"]
 
         # Deduplicate while preserving order
         seen = set()

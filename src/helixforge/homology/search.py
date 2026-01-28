@@ -421,6 +421,18 @@ class HomologySearch:
             output_path = fasta_path.with_suffix("")
         output_path = Path(output_path)
 
+        # Handle case where user passes a directory instead of a filename
+        if output_path.is_dir() or str(output_path) in (".", "./", ".."):
+            # Use input filename as base, place in the specified directory
+            base_name = fasta_path.stem
+            output_path = output_path / base_name
+        elif output_path.name == "" or output_path.name == ".":
+            raise ValueError(
+                f"Invalid output path: '{output_path}'. "
+                "Please specify a filename, not just a directory. "
+                f"Example: --output {fasta_path.stem}"
+            )
+
         logger.info(f"Formatting database from {fasta_path}")
 
         if self.tool == SearchTool.DIAMOND:
@@ -515,14 +527,16 @@ class HomologySearch:
             query: Query FASTA path.
             output: Output file path.
         """
-        outfmt_str = " ".join(["6"] + DIAMOND_OUTFMT)
-
+        # Build command with outfmt fields as separate arguments
+        # Newer Diamond versions require: --outfmt 6 field1 field2 ...
+        # (not: --outfmt "6 field1 field2 ...")
         cmd = [
             "diamond", "blastp",
             "--db", str(self.database),
             "--query", str(query),
             "--out", str(output),
-            "--outfmt", outfmt_str,
+            "--outfmt", "6",
+        ] + DIAMOND_OUTFMT + [
             "--threads", str(self.threads),
             "--evalue", str(self.evalue),
             "--max-target-seqs", str(self.max_target_seqs),

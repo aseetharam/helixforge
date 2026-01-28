@@ -921,6 +921,27 @@ def qc():
     show_default=True,
     help="Minimum confidence for low tier (below = reject).",
 )
+@click.option(
+    "--aed-rnaseq-weight",
+    type=float,
+    default=0.4,
+    show_default=True,
+    help="Weight for RNA-seq evidence in combined AED calculation.",
+)
+@click.option(
+    "--aed-homology-weight",
+    type=float,
+    default=0.4,
+    show_default=True,
+    help="Weight for homology evidence in combined AED calculation.",
+)
+@click.option(
+    "--aed-confidence-weight",
+    type=float,
+    default=0.2,
+    show_default=True,
+    help="Weight for Helixer confidence in combined AED calculation.",
+)
 @click.pass_context
 def qc_aggregate(
     ctx: click.Context,
@@ -932,6 +953,9 @@ def qc_aggregate(
     high_threshold: float,
     medium_threshold: float,
     low_threshold: float,
+    aed_rnaseq_weight: float,
+    aed_homology_weight: float,
+    aed_confidence_weight: float,
 ) -> None:
     """Aggregate QC results from refine, confidence, splice, and homology modules.
 
@@ -942,12 +966,29 @@ def qc_aggregate(
     which includes confidence, splice, and evidence scores in a single file.
 
     \b
+    Combined AED Calculation:
+        The output includes both 'rnaseq_aed' (RNA-seq only) and 'combined_aed'
+        which incorporates all evidence types:
+
+        combined_evidence = (w_rnaseq * rnaseq_score +
+                             w_homology * homology_score +
+                             w_confidence * confidence_score)
+        combined_aed = 1 - combined_evidence
+
+        This addresses the issue where genes with good homology but no RNA-seq
+        expression would incorrectly appear poorly supported with RNA-seq-only AED.
+
+    \b
     Examples:
         # Using refine output (recommended)
         $ helixforge qc aggregate --refine-tsv refine_report.tsv --homology-tsv validation.tsv -o qc_results.tsv
 
         # Using separate module outputs
         $ helixforge qc aggregate --confidence-tsv scores.tsv --splice-tsv splice_report.tsv -o qc_results.tsv
+
+        # Custom AED weights (prioritize homology)
+        $ helixforge qc aggregate --refine-tsv refine.tsv --homology-tsv homology.tsv -o qc.tsv \\
+            --aed-rnaseq-weight 0.3 --aed-homology-weight 0.5 --aed-confidence-weight 0.2
     """
     from helixforge.qc import QCAggregator, QCAggregatorConfig, export_qc_tsv
 
@@ -969,10 +1010,19 @@ def qc_aggregate(
             console.print(f"[blue]Homology TSV:[/blue] {homology_tsv}")
 
     try:
+        # Validate AED weights sum to 1.0
+        aed_weight_sum = aed_rnaseq_weight + aed_homology_weight + aed_confidence_weight
+        if abs(aed_weight_sum - 1.0) > 0.01:
+            console.print(f"[red]Error:[/red] AED weights must sum to 1.0, got {aed_weight_sum:.2f}")
+            raise SystemExit(1)
+
         config = QCAggregatorConfig(
             high_confidence_threshold=high_threshold,
             medium_confidence_threshold=medium_threshold,
             low_confidence_threshold=low_threshold,
+            aed_rnaseq_weight=aed_rnaseq_weight,
+            aed_homology_weight=aed_homology_weight,
+            aed_confidence_weight=aed_confidence_weight,
         )
 
         aggregator = QCAggregator(config)
@@ -987,6 +1037,7 @@ def qc_aggregate(
 
         if not quiet:
             console.print(f"[green]Aggregated {len(gene_qcs)} genes to:[/green] {output}")
+            console.print(f"[blue]AED weights:[/blue] RNA-seq={aed_rnaseq_weight}, Homology={aed_homology_weight}, Confidence={aed_confidence_weight}")
 
             # Print tier summary
             from helixforge.qc import summarize_qc_results
@@ -997,6 +1048,17 @@ def qc_aggregate(
                 count = tier_counts.get(tier, 0)
                 pct = count / len(gene_qcs) * 100 if gene_qcs else 0
                 console.print(f"  {tier.capitalize()}: {count} ({pct:.1f}%)")
+
+            # Print AED summary
+            rnaseq_aeds = [qc.rnaseq_aed for qc in gene_qcs.values() if qc.rnaseq_aed is not None]
+            combined_aeds = [qc.combined_aed for qc in gene_qcs.values() if qc.combined_aed is not None]
+            console.print("\n[bold]AED Summary:[/bold]")
+            if rnaseq_aeds:
+                mean_rnaseq = sum(rnaseq_aeds) / len(rnaseq_aeds)
+                console.print(f"  Mean RNA-seq AED:   {mean_rnaseq:.4f}")
+            if combined_aeds:
+                mean_combined = sum(combined_aeds) / len(combined_aeds)
+                console.print(f"  Mean Combined AED:  {mean_combined:.4f}")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -1575,7 +1637,19 @@ def validate(
 @click.option(
     "--plot-dir",
     type=click.Path(path_type=Path),
-    help="Directory for per-gene confidence plots.",
+    help="Directory for per-gene confidence plots. Use with --plot-threshold or --max-plots to limit output for large genomes.",
+)
+@click.option(
+    "--plot-threshold",
+    type=float,
+    default=None,
+    help="Only plot genes with confidence below this threshold (e.g., 0.7). Recommended for large genomes.",
+)
+@click.option(
+    "--max-plots",
+    type=int,
+    default=None,
+    help="Maximum number of gene plots to generate. Plots lowest-confidence genes first.",
 )
 @click.option(
     "--distribution-plot",
@@ -1635,6 +1709,8 @@ def confidence(
     bed: Optional[Path],
     low_conf_bed: Optional[Path],
     plot_dir: Optional[Path],
+    plot_threshold: Optional[float],
+    max_plots: Optional[int],
     distribution_plot: Optional[Path],
     threshold: float,
     threads: int,
@@ -1853,18 +1929,69 @@ def confidence(
                         "Please remove it or use a different --plot-dir path."
                     )
                     raise SystemExit(1)
-                plot_dir.mkdir(parents=True, exist_ok=True)
-                paths = plot_gene_confidence_batch(
-                    genes,
-                    scores,
-                    plot_dir,
-                    format=plot_format,
-                    calc=calc,
-                )
-                if not quiet:
-                    console.print(
-                        f"[green]Generated {len(paths)} gene plots in:[/green] {plot_dir}"
+
+                # Filter genes/scores for plotting
+                plot_genes = genes
+                plot_scores = scores
+
+                # Apply threshold filter if specified
+                if plot_threshold is not None:
+                    filtered = [
+                        (g, s)
+                        for g, s in zip(genes, scores)
+                        if s.overall_score < plot_threshold
+                    ]
+                    plot_genes = [g for g, _ in filtered]
+                    plot_scores = [s for _, s in filtered]
+                    if not quiet:
+                        console.print(
+                            f"[dim]Filtering plots to {len(plot_genes)} genes "
+                            f"with confidence < {plot_threshold}[/dim]"
+                        )
+
+                # Sort by confidence (lowest first) and apply max_plots limit
+                if max_plots is not None and len(plot_genes) > max_plots:
+                    # Sort by confidence score ascending
+                    sorted_pairs = sorted(
+                        zip(plot_genes, plot_scores),
+                        key=lambda x: x[1].overall_score,
                     )
+                    plot_genes = [g for g, _ in sorted_pairs[:max_plots]]
+                    plot_scores = [s for _, s in sorted_pairs[:max_plots]]
+                    if not quiet:
+                        console.print(
+                            f"[dim]Limiting to {max_plots} lowest-confidence genes[/dim]"
+                        )
+
+                # Warn if generating many plots
+                if len(plot_genes) > 500 and plot_threshold is None and max_plots is None:
+                    console.print(
+                        f"[yellow]Warning:[/yellow] About to generate {len(plot_genes)} "
+                        "individual plot files. This may take a while and use significant "
+                        "disk space.\n"
+                        "  Consider using --plot-threshold to only plot low-confidence genes,\n"
+                        "  or --max-plots to limit the number of plots."
+                    )
+
+                if len(plot_genes) == 0:
+                    if not quiet:
+                        console.print(
+                            "[dim]No genes match the plotting criteria. "
+                            "No plots generated.[/dim]"
+                        )
+                else:
+                    plot_dir.mkdir(parents=True, exist_ok=True)
+                    paths = plot_gene_confidence_batch(
+                        plot_genes,
+                        plot_scores,
+                        plot_dir,
+                        format=plot_format,
+                        calc=calc,
+                    )
+                    if not quiet:
+                        console.print(
+                            f"[green]Generated {len(paths)} gene plots in:[/green] {plot_dir}"
+                        )
 
             # Print summary
             if not quiet:
@@ -3527,7 +3654,7 @@ def search(
 )
 @click.option(
     "--te-bed",
-    type=click.Path(exists=True, path_type=Path),
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="BED file with transposable element annotations.",
 )
 @click.option(
@@ -3640,8 +3767,26 @@ def validate_homology(
             te_annotations=te_intervals,
         )
 
-        # Validate
+        # Validate genes with hits
         results = validator.validate_from_search(hits_by_gene, gene_info)
+
+        # Add genes without hits as "no_hit" status
+        from helixforge.homology.validate import ValidationResult
+        all_gene_ids = set(gene_info.keys())
+        genes_with_hits = set(results.keys())
+        genes_without_hits = all_gene_ids - genes_with_hits
+
+        for gene_id in genes_without_hits:
+            results[gene_id] = ValidationResult(
+                gene_id=gene_id,
+                status=HomologyStatus.NO_HIT,
+                n_hits=0,
+                flags=["no_homology"],
+                notes=["No significant homology found"],
+            )
+
+        if not quiet:
+            console.print(f"[yellow]Added {len(genes_without_hits)} genes without homology hits as 'no_hit'[/yellow]")
 
         # Write main report
         output.parent.mkdir(parents=True, exist_ok=True)

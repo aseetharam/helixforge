@@ -421,7 +421,7 @@ helixforge homology extract-proteins \
     -o proteins.fa
 
 helixforge homology search \
-    --proteins proteins.fa \
+    --query proteins.fa \
     --database uniprot.dmnd \
     -o hits.tsv \
     --threads 16
@@ -432,10 +432,20 @@ helixforge homology validate \
     -o validation.tsv
 
 # QC aggregation and reporting
+# Calculates combined AED from RNA-seq + homology + confidence evidence
 helixforge qc aggregate \
     --refine-tsv refine_report.tsv \
     --homology-tsv validation.tsv \
     -o qc_results.tsv
+
+# Custom AED weights (for species with limited RNA-seq data)
+helixforge qc aggregate \
+    --refine-tsv refine_report.tsv \
+    --homology-tsv validation.tsv \
+    -o qc_results.tsv \
+    --aed-rnaseq-weight 0.3 \
+    --aed-homology-weight 0.5 \
+    --aed-confidence-weight 0.2
 
 helixforge qc report \
     --qc-tsv qc_results.tsv \

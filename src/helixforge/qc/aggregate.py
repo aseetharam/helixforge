@@ -75,16 +75,27 @@ class QCAggregatorConfig:
     min_homology_coverage: float = 0.80
     min_homology_identity: float = 0.50
 
+    # Combined AED weights (should sum to 1.0)
+    # These weight the contribution of each evidence type to combined_aed
+    aed_rnaseq_weight: float = 0.4  # Weight for RNA-seq evidence
+    aed_homology_weight: float = 0.4  # Weight for homology evidence
+    aed_confidence_weight: float = 0.2  # Weight for Helixer confidence
+
     def validate(self) -> None:
         """Validate configuration values.
 
         Raises:
             ValueError: If any configuration value is invalid.
         """
-        # Check weights sum to 1
+        # Check tier weights sum to 1
         total = self.confidence_weight + self.splice_weight + self.homology_weight
         if abs(total - 1.0) > 0.001:
-            raise ValueError(f"Weights must sum to 1.0, got {total}")
+            raise ValueError(f"Tier weights must sum to 1.0, got {total}")
+
+        # Check AED weights sum to 1
+        aed_total = self.aed_rnaseq_weight + self.aed_homology_weight + self.aed_confidence_weight
+        if abs(aed_total - 1.0) > 0.001:
+            raise ValueError(f"AED weights must sum to 1.0, got {aed_total}")
 
         # Check thresholds are in order
         if not (0 <= self.low_confidence_threshold <= self.medium_confidence_threshold
@@ -173,6 +184,9 @@ class QCAggregator:
             if homology_results and gene_id in homology_results:
                 self._add_homology(gene_qc, homology_results[gene_id])
 
+            # Calculate combined AED
+            self._calculate_combined_aed(gene_qc)
+
             # Classify tier
             gene_qc.classify_tier(
                 high_threshold=self.config.high_confidence_threshold,
@@ -184,6 +198,75 @@ class QCAggregator:
 
         return results
 
+    def _calculate_combined_aed(self, gene_qc: GeneQC) -> None:
+        """Calculate combined AED incorporating all evidence types.
+
+        The combined AED weights RNA-seq evidence, homology evidence, and
+        Helixer confidence to provide a more complete picture than RNA-seq
+        alone. This addresses the issue where genes with good homology but
+        no RNA-seq expression would incorrectly appear poorly supported.
+
+        Formula:
+            combined_evidence = (w_rnaseq * rnaseq_score +
+                                 w_homology * homology_score +
+                                 w_confidence * confidence_score)
+            combined_aed = 1 - combined_evidence
+
+        Args:
+            gene_qc: The GeneQC object to update.
+        """
+        # Extract RNA-seq AED from metrics (stored as 'aed' in refine report)
+        rnaseq_aed = None
+        if gene_qc.splice_metrics and "aed" in gene_qc.splice_metrics:
+            try:
+                rnaseq_aed = float(gene_qc.splice_metrics["aed"])
+            except (ValueError, TypeError):
+                pass
+        elif gene_qc.confidence_metrics and "aed" in gene_qc.confidence_metrics:
+            try:
+                rnaseq_aed = float(gene_qc.confidence_metrics["aed"])
+            except (ValueError, TypeError):
+                pass
+
+        # Store rnaseq_aed for clarity
+        gene_qc.rnaseq_aed = rnaseq_aed
+
+        # Convert RNA-seq AED to evidence score (0-1, higher = better)
+        rnaseq_evidence = (1.0 - rnaseq_aed) if rnaseq_aed is not None else 0.0
+
+        # Get homology evidence (0-1, higher = better)
+        # homology_score is already query_coverage * identity (normalized)
+        homology_evidence = gene_qc.homology_score if gene_qc.homology_score is not None else 0.0
+
+        # Get confidence evidence (0-1, higher = better)
+        confidence_evidence = gene_qc.confidence_score if gene_qc.confidence_score is not None else 0.0
+
+        # Calculate weighted combined evidence
+        w_rnaseq = self.config.aed_rnaseq_weight
+        w_homology = self.config.aed_homology_weight
+        w_confidence = self.config.aed_confidence_weight
+
+        # Handle missing evidence types by redistributing weights
+        available_weight = 0.0
+        combined_evidence = 0.0
+
+        if rnaseq_aed is not None:
+            combined_evidence += w_rnaseq * rnaseq_evidence
+            available_weight += w_rnaseq
+        if gene_qc.homology_score is not None:
+            combined_evidence += w_homology * homology_evidence
+            available_weight += w_homology
+        if gene_qc.confidence_score is not None:
+            combined_evidence += w_confidence * confidence_evidence
+            available_weight += w_confidence
+
+        # Normalize by available weight to handle missing data
+        if available_weight > 0:
+            combined_evidence = combined_evidence / available_weight
+            gene_qc.combined_aed = 1.0 - combined_evidence
+        else:
+            gene_qc.combined_aed = None
+
     def _add_confidence(self, gene_qc: GeneQC, data: dict[str, Any]) -> None:
         """Add confidence module results to GeneQC.
 
@@ -191,9 +274,11 @@ class QCAggregator:
             gene_qc: The GeneQC object to update.
             data: Confidence results dict.
         """
-        # Store overall score
+        # Store overall score - check multiple possible column names
         if "overall_score" in data:
             gene_qc.confidence_score = data["overall_score"]
+        elif "confidence_score" in data:
+            gene_qc.confidence_score = data["confidence_score"]
         elif "score" in data:
             gene_qc.confidence_score = data["score"]
 
@@ -227,8 +312,14 @@ class QCAggregator:
                 gene_qc.add_flag(Flags.UNCERTAIN_BOUNDARY)
 
         # Add flags from the module itself
-        if "flags" in data:
-            for flag_code in data["flags"]:
+        if "flags" in data and data["flags"]:
+            flag_data = data["flags"]
+            # Handle both string (comma-separated) and list formats
+            if isinstance(flag_data, str):
+                flag_codes = [f.strip() for f in flag_data.split(",") if f.strip()]
+            else:
+                flag_codes = flag_data
+            for flag_code in flag_codes:
                 flag = Flags.get_by_code(flag_code)
                 if flag:
                     gene_qc.add_flag(flag)
@@ -238,9 +329,9 @@ class QCAggregator:
 
         Args:
             gene_qc: The GeneQC object to update.
-            data: Splice results dict.
+            data: Splice results dict (may come from refine report or splice module).
         """
-        # Calculate splice score
+        # Calculate splice score - handle multiple possible column formats
         total_junctions = data.get("canonical_count", 0) + data.get("noncanonical_count", 0)
         if total_junctions > 0:
             canonical = data.get("canonical_count", 0)
@@ -249,6 +340,27 @@ class QCAggregator:
             canonical_ratio = canonical / total_junctions
             supported_ratio = supported / total_junctions if total_junctions > 0 else 0
             gene_qc.splice_score = 0.6 * canonical_ratio + 0.4 * supported_ratio
+        elif "junction_support" in data:
+            # Refine report format - junction_support may be a ratio (0-1) or fraction "5/5"
+            junction_support = data.get("junction_support")
+            if junction_support is not None:
+                # Handle fraction format like "5/5" or "N/A"
+                if isinstance(junction_support, str):
+                    if "/" in junction_support:
+                        try:
+                            num, denom = junction_support.split("/")
+                            if denom and int(denom) > 0:
+                                gene_qc.splice_score = int(num) / int(denom)
+                        except (ValueError, ZeroDivisionError):
+                            pass  # Leave splice_score as None
+                    # "N/A" or other non-parseable strings are ignored
+                elif isinstance(junction_support, (int, float)):
+                    gene_qc.splice_score = float(junction_support)
+        elif "evidence_score" in data:
+            # Refine report also has evidence_score which incorporates splice/junction info
+            evidence_score = data.get("evidence_score")
+            if evidence_score is not None and gene_qc.splice_score is None:
+                gene_qc.splice_score = evidence_score
 
         # Store detailed metrics
         gene_qc.splice_metrics = {
@@ -266,9 +378,9 @@ class QCAggregator:
         if noncanonical > 0:
             gene_qc.add_flag(Flags.NON_CANONICAL_SPLICE)
 
-        # Check for corrections made
-        corrections = data.get("corrections", 0)
-        if corrections > 0:
+        # Check for corrections made - handle both column names
+        corrections = data.get("corrections", data.get("splice_corrections", 0))
+        if corrections and corrections > 0:
             gene_qc.add_flag(Flags.SHIFTED_JUNCTION)
 
         # Check for short introns
@@ -277,8 +389,14 @@ class QCAggregator:
                 gene_qc.add_flag(Flags.SHORT_INTRON)
 
         # Add flags from the module itself
-        if "flags" in data:
-            for flag_code in data["flags"]:
+        if "flags" in data and data["flags"]:
+            flag_data = data["flags"]
+            # Handle both string (comma-separated) and list formats
+            if isinstance(flag_data, str):
+                flag_codes = [f.strip() for f in flag_data.split(",") if f.strip()]
+            else:
+                flag_codes = flag_data
+            for flag_code in flag_codes:
                 flag = Flags.get_by_code(flag_code)
                 if flag:
                     gene_qc.add_flag(flag)
@@ -290,16 +408,31 @@ class QCAggregator:
             gene_qc: The GeneQC object to update.
             data: Homology results dict.
         """
-        # Calculate homology score
-        coverage = data.get("query_coverage", 0)
-        identity = data.get("identity", 0)
+        # Calculate homology score - ensure numeric values
+        try:
+            coverage = float(data.get("query_coverage") or 0)
+        except (ValueError, TypeError):
+            coverage = 0
+        try:
+            identity = float(data.get("identity") or 0)
+        except (ValueError, TypeError):
+            identity = 0
+
+        # Get status (case-insensitive)
+        status = data.get("status", "")
+        status_lower = status.lower() if isinstance(status, str) else ""
+
         if coverage > 0 and identity > 0:
+            # Identity is typically 0-100, coverage is 0-1
+            # Normalize identity to 0-1 if needed
+            if identity > 1:
+                identity = identity / 100.0
             gene_qc.homology_score = coverage * identity
-        elif data.get("status") == "COMPLETE":
+        elif status_lower == "complete":
             gene_qc.homology_score = 1.0
-        elif data.get("status") == "PARTIAL":
+        elif status_lower == "partial":
             gene_qc.homology_score = 0.5
-        elif data.get("status") == "NO_HIT":
+        elif status_lower == "no_hit":
             gene_qc.homology_score = 0.0
 
         # Store detailed metrics
@@ -308,33 +441,47 @@ class QCAggregator:
             if k not in ("flags", "gene_id")
         }
 
-        # Check homology status
+        # Check homology status (case-insensitive)
         status = data.get("status", "")
-        if status == "NO_HIT":
-            gene_qc.add_flag(Flags.NO_HOMOLOGY)
-        elif status == "PARTIAL":
-            gene_qc.add_flag(Flags.PARTIAL_HOMOLOGY)
+        if isinstance(status, str):
+            status_lower = status.lower()
+            if status_lower == "no_hit":
+                gene_qc.add_flag(Flags.NO_HOMOLOGY)
+            elif status_lower == "partial":
+                gene_qc.add_flag(Flags.PARTIAL_HOMOLOGY)
 
         # Check for coverage below threshold
         if coverage < self.config.min_homology_coverage and coverage > 0:
             gene_qc.add_flag(Flags.PARTIAL_HOMOLOGY)
 
-        # Check for chimeric
-        if data.get("is_chimeric", False):
+        # Check for chimeric - handle string "yes"/"no" or boolean
+        is_chimeric = data.get("is_chimeric", False)
+        if is_chimeric is True or (isinstance(is_chimeric, str) and is_chimeric.lower() in ("yes", "true", "1")):
             gene_qc.add_flag(Flags.CHIMERIC)
 
-        # Check for fragmented
-        if data.get("is_fragmented", False):
+        # Check for fragmented - handle string "yes"/"no" or boolean
+        is_fragmented = data.get("is_fragmented", False)
+        if is_fragmented is True or (isinstance(is_fragmented, str) and is_fragmented.lower() in ("yes", "true", "1")):
             gene_qc.add_flag(Flags.FRAGMENTED)
 
         # Check for TE overlap
-        te_overlap = data.get("te_overlap", 0)
+        te_overlap = data.get("te_overlap", 0) or 0
+        try:
+            te_overlap = float(te_overlap)
+        except (ValueError, TypeError):
+            te_overlap = 0
         if te_overlap > 0:
             gene_qc.add_flag(Flags.TE_OVERLAP)
 
         # Add flags from the module itself
-        if "flags" in data:
-            for flag_code in data["flags"]:
+        if "flags" in data and data["flags"]:
+            flag_data = data["flags"]
+            # Handle both string (comma-separated) and list formats
+            if isinstance(flag_data, str):
+                flag_codes = [f.strip() for f in flag_data.split(",") if f.strip()]
+            else:
+                flag_codes = flag_data
+            for flag_code in flag_codes:
                 flag = Flags.get_by_code(flag_code)
                 if flag:
                     gene_qc.add_flag(flag)
@@ -547,11 +694,25 @@ def export_qc_tsv(
         "confidence_score",
         "splice_score",
         "homology_score",
+        "rnaseq_aed",
+        "combined_aed",
     ]
 
     with open(output_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=columns, delimiter="\t")
         writer.writeheader()
+
+        def format_score(score: Any) -> str:
+            """Format score as float string, handling non-numeric gracefully."""
+            if score is None:
+                return ""
+            if isinstance(score, (int, float)):
+                return f"{score:.4f}"
+            # Try to convert string to float
+            try:
+                return f"{float(score):.4f}"
+            except (ValueError, TypeError):
+                return ""
 
         for gene_id, qc in sorted(gene_qcs.items()):
             row = {
@@ -560,8 +721,10 @@ def export_qc_tsv(
                 "flag_count": qc.flag_count,
                 "flag_codes": ",".join(qc.flag_codes),
                 "max_severity": qc.max_severity.value if qc.max_severity else "",
-                "confidence_score": f"{qc.confidence_score:.4f}" if qc.confidence_score else "",
-                "splice_score": f"{qc.splice_score:.4f}" if qc.splice_score else "",
-                "homology_score": f"{qc.homology_score:.4f}" if qc.homology_score else "",
+                "confidence_score": format_score(qc.confidence_score),
+                "splice_score": format_score(qc.splice_score),
+                "homology_score": format_score(qc.homology_score),
+                "rnaseq_aed": format_score(qc.rnaseq_aed),
+                "combined_aed": format_score(qc.combined_aed),
             }
             writer.writerow(row)

@@ -291,6 +291,103 @@ def decompress_gzip(
     return output_path
 
 
+def convert_uniprot_dat_to_fasta(
+    dat_path: Path | str,
+    fasta_path: Path | str | None = None,
+) -> Path:
+    """Convert UniProt DAT (flat file) format to FASTA.
+
+    Args:
+        dat_path: Path to UniProt DAT file (.dat or .dat.gz).
+        fasta_path: Output FASTA path. Auto-determined if None.
+
+    Returns:
+        Path to FASTA file.
+    """
+    dat_path = Path(dat_path)
+
+    if fasta_path is None:
+        # Generate output path
+        stem = dat_path.stem
+        if stem.endswith(".dat"):
+            stem = stem[:-4]
+        fasta_path = dat_path.parent / f"{stem}.fasta"
+    fasta_path = Path(fasta_path)
+    fasta_path.parent.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"Converting {dat_path.name} to FASTA format")
+
+    # Handle gzipped input
+    if dat_path.suffix == ".gz":
+        opener = gzip.open
+        mode = "rt"
+    else:
+        opener = open
+        mode = "r"
+
+    n_sequences = 0
+    with opener(dat_path, mode) as f_in, open(fasta_path, "w") as f_out:
+        accession = None
+        entry_name = None
+        description = None
+        organism = None
+        sequence_lines = []
+        in_sequence = False
+
+        for line in f_in:
+            if line.startswith("ID   "):
+                # ID   108_SOLLC               Reviewed;         102 AA.
+                parts = line[5:].split()
+                entry_name = parts[0] if parts else "UNKNOWN"
+                in_sequence = False
+            elif line.startswith("AC   "):
+                # AC   Q43495;
+                # Take first accession
+                if accession is None:
+                    acc_part = line[5:].strip().rstrip(";")
+                    accession = acc_part.split(";")[0].strip()
+            elif line.startswith("DE   RecName: Full="):
+                # DE   RecName: Full=Protein 108;
+                desc = line[19:].strip().rstrip(";")
+                if description is None:
+                    description = desc
+            elif line.startswith("OS   "):
+                # OS   Solanum lycopersicum (Tomato)
+                if organism is None:
+                    organism = line[5:].strip().rstrip(".")
+            elif line.startswith("SQ   "):
+                # Start of sequence
+                in_sequence = True
+                sequence_lines = []
+            elif line.startswith("//"):
+                # End of entry - write FASTA
+                if accession and sequence_lines:
+                    sequence = "".join(sequence_lines).replace(" ", "").replace("\n", "")
+                    header = f">sp|{accession}|{entry_name}"
+                    if description:
+                        header += f" {description}"
+                    if organism:
+                        header += f" OS={organism}"
+                    f_out.write(f"{header}\n")
+                    # Write sequence in 60-char lines
+                    for i in range(0, len(sequence), 60):
+                        f_out.write(f"{sequence[i:i+60]}\n")
+                    n_sequences += 1
+                # Reset for next entry
+                accession = None
+                entry_name = None
+                description = None
+                organism = None
+                sequence_lines = []
+                in_sequence = False
+            elif in_sequence and line.startswith("     "):
+                # Sequence line
+                sequence_lines.append(line.strip())
+
+    logger.info(f"Converted {n_sequences} sequences to {fasta_path}")
+    return fasta_path
+
+
 # =============================================================================
 # Swiss-Prot Functions
 # =============================================================================
@@ -316,18 +413,23 @@ def download_swissprot(
 
     # Determine URL and filename
     if taxonomy and taxonomy.lower() in TAXONOMY_DIVISIONS:
-        # Use taxonomy-specific file
+        # Taxonomy-specific files are only available in DAT format on UniProt FTP
+        # We download DAT and convert to FASTA
         division = TAXONOMY_DIVISIONS[taxonomy.lower()]
         url = SWISSPROT_TAXONOMY_URL.format(division=division)
-        filename = f"uniprot_sprot_{division}.fasta.gz"
+        dat_filename = f"uniprot_sprot_{division}.dat.gz"
+        fasta_filename = f"uniprot_sprot_{division}.fasta"
         name = f"Swiss-Prot ({taxonomy})"
+        is_dat_format = True
     else:
-        # Use full Swiss-Prot
+        # Full Swiss-Prot is available in FASTA format
         url = SWISSPROT_URL
-        filename = "uniprot_sprot.fasta.gz"
+        dat_filename = "uniprot_sprot.fasta.gz"
+        fasta_filename = "uniprot_sprot.fasta"
         name = "Swiss-Prot (complete)"
+        is_dat_format = False
 
-    gz_path = output_dir / filename
+    gz_path = output_dir / dat_filename
 
     # Download
     download_file(url, gz_path)
@@ -335,8 +437,15 @@ def download_swissprot(
     # Calculate checksum
     checksum = calculate_md5(gz_path)
 
-    # Decompress if requested
-    if decompress:
+    # Handle format conversion
+    if is_dat_format:
+        # Convert DAT to FASTA (handles gzipped input)
+        fasta_path = output_dir / fasta_filename
+        fasta_path = convert_uniprot_dat_to_fasta(gz_path, fasta_path)
+        # Remove the DAT file to save space
+        gz_path.unlink()
+        logger.debug(f"Removed {gz_path}")
+    elif decompress:
         fasta_path = decompress_gzip(gz_path)
     else:
         fasta_path = gz_path

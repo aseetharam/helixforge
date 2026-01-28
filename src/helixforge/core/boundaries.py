@@ -635,13 +635,21 @@ class BoundaryAdjuster:
         if transcript.strand == "+":
             # Modify first CDS start
             old_start, old_end, phase = sorted_cds[0]
-            new_cds = [(old_start + shift, old_end, 0)]  # Reset phase to 0
+            new_start = old_start + shift
+            # Validate: don't create invalid CDS (start >= end)
+            if new_start >= old_end:
+                return  # Skip this adjustment
+            new_cds = [(new_start, old_end, 0)]  # Reset phase to 0
             new_cds.extend(sorted_cds[1:])
         else:
             # Modify last CDS end
             old_start, old_end, phase = sorted_cds[-1]
+            new_end = old_end - shift
+            # Validate: don't create invalid CDS (start >= end)
+            if old_start >= new_end:
+                return  # Skip this adjustment
             new_cds = sorted_cds[:-1]
-            new_cds.append((old_start, old_end - shift, 0))
+            new_cds.append((old_start, new_end, 0))
 
         transcript.cds = new_cds
 
@@ -679,12 +687,20 @@ class BoundaryAdjuster:
         if transcript.strand == "+":
             # Modify last CDS end
             old_start, old_end, phase = sorted_cds[-1]
+            new_end = old_end + shift
+            # Validate: don't create invalid CDS (start >= end)
+            if old_start >= new_end:
+                return  # Skip this adjustment
             new_cds = sorted_cds[:-1]
-            new_cds.append((old_start, old_end + shift, phase))
+            new_cds.append((old_start, new_end, phase))
         else:
             # Modify first CDS start
             old_start, old_end, phase = sorted_cds[0]
-            new_cds = [(old_start - shift, old_end, phase)]
+            new_start = old_start - shift
+            # Validate: don't create invalid CDS (start >= end)
+            if new_start >= old_end:
+                return  # Skip this adjustment
+            new_cds = [(new_start, old_end, phase)]
             new_cds.extend(sorted_cds[1:])
 
         transcript.cds = new_cds

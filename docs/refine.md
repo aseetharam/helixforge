@@ -92,6 +92,8 @@ RNA-seq evidence is evaluated for each refined gene:
 
 The AED score is MAKER-compatible: 0 = perfect support, 1 = no support.
 
+> **Note:** This AED is based on **RNA-seq evidence only**. For a combined AED that incorporates homology and Helixer confidence, use `helixforge qc aggregate` which calculates `combined_aed` from all available evidence types. This is important for genes with good homology support but no expression in sampled tissues.
+
 **Key parameters:**
 - `--min-coverage`: Minimum coverage for exon expression (default: 5)
 - `--boundary-tolerance`: Maximum shift for near-match junctions (default: 10 bp)
@@ -163,10 +165,12 @@ chr1    HelixForge    gene    1000    5000    .    +    .    ID=gene1;confidence
 |-----------|-------------|
 | `confidence_score` | HDF5-based confidence score (0-1) |
 | `evidence_score` | RNA-seq evidence score (0-1), equals 1 - AED |
-| `aed` | Annotation Edit Distance (0-1, MAKER-compatible) |
-| `junction_support` | Fraction of supported junctions |
+| `aed` | RNA-seq Annotation Edit Distance (0-1, MAKER-compatible) |
+| `junction_support` | Fraction of supported junctions (e.g., "5/5" or ratio) |
 | `mean_coverage` | Mean exon coverage from RNA-seq |
 | `flags` | Comma-separated quality flags |
+
+> **Note:** The `aed` attribute here is based only on RNA-seq evidence. The `qc aggregate` command calculates a `combined_aed` that also incorporates homology and Helixer confidence.
 | `evidence_level` | Optional: full/partial/minimal/none |
 | `splice_corrections` | Optional: number of corrected splice sites |
 | `boundary_adjusted` | Optional: yes if boundaries were adjusted |

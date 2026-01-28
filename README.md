@@ -43,11 +43,13 @@ helixforge refine \
 
 # Validate with protein homology
 helixforge homology extract-proteins --gff refined.gff3 --genome genome.fa -o proteins.fa
-helixforge homology search --proteins proteins.fa --database swissprot.dmnd -o hits.tsv
+helixforge homology search --query proteins.fa --database swissprot.dmnd -o hits.tsv
 helixforge homology validate --search-results hits.tsv --gff refined.gff3 -o validation.tsv
 
-# Aggregate QC results and generate report
+# Aggregate QC results (calculates combined AED from RNA-seq + homology + confidence)
 helixforge qc aggregate --refine-tsv refine_report.tsv --homology-tsv validation.tsv -o qc.tsv
+
+# Generate HTML report
 helixforge qc report --qc-tsv qc.tsv -o qc_report.html
 
 # Create tiered output GFF files

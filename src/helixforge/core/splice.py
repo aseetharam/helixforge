@@ -1352,30 +1352,64 @@ class SpliceRefiner:
         new_exons = []
         for i, (start, end) in enumerate(sorted_exons):
             if i == exon_before_idx:
-                new_exons.append((start, refined_intron.start))
+                new_end = refined_intron.start
+                # Validate: don't create invalid exon (start >= end)
+                if new_end <= start:
+                    # Skip this correction - would create invalid exon
+                    new_exons.append((start, end))
+                else:
+                    new_exons.append((start, new_end))
             elif i == exon_after_idx:
-                new_exons.append((refined_intron.end, end))
+                new_start = refined_intron.end
+                # Validate: don't create invalid exon (start >= end)
+                if new_start >= end:
+                    # Skip this correction - would create invalid exon
+                    new_exons.append((start, end))
+                else:
+                    new_exons.append((new_start, end))
             else:
                 new_exons.append((start, end))
 
         transcript.exons = new_exons
 
-        # Update CDS coordinates proportionally
-        # This is simplified - in practice would need frame-aware adjustment
+        # Update CDS coordinates based on coordinate overlap with affected exons
+        # (not by index - CDS indices don't necessarily match exon indices due to UTRs)
         if transcript.cds:
             sorted_cds = sorted(transcript.cds)
             new_cds = []
 
-            for i, (cds_start, cds_end, phase) in enumerate(sorted_cds):
-                # Check if this CDS overlaps with affected exons
-                if i == exon_before_idx and i < len(sorted_cds):
-                    # CDS ends at intron
-                    new_cds.append((cds_start, min(cds_end, refined_intron.start), phase))
-                elif i == exon_after_idx and i < len(sorted_cds):
-                    # CDS starts after intron
-                    new_cds.append((max(cds_start, refined_intron.end), cds_end, phase))
-                else:
+            # Get the original exon boundaries (before correction)
+            orig_exon_before = sorted_exons[exon_before_idx]
+            orig_exon_after = sorted_exons[exon_after_idx]
+
+            for cds_start, cds_end, phase in sorted_cds:
+                new_cds_start = cds_start
+                new_cds_end = cds_end
+
+                # Check if this CDS overlaps with the exon BEFORE the intron
+                # (its end might need to be adjusted to the new intron start)
+                if (cds_start >= orig_exon_before[0] and cds_start < orig_exon_before[1] and
+                        cds_end > orig_exon_before[0] and cds_end <= orig_exon_before[1] + 10):
+                    # CDS is within or near the exon before the intron
+                    # Adjust end if it extends past the new intron start
+                    if cds_end > refined_intron.start:
+                        new_cds_end = refined_intron.start
+
+                # Check if this CDS overlaps with the exon AFTER the intron
+                # (its start might need to be adjusted to the new intron end)
+                if (cds_start >= orig_exon_after[0] - 10 and cds_start < orig_exon_after[1] and
+                        cds_end > orig_exon_after[0] and cds_end <= orig_exon_after[1]):
+                    # CDS is within or near the exon after the intron
+                    # Adjust start if it's before the new intron end
+                    if cds_start < refined_intron.end:
+                        new_cds_start = refined_intron.end
+
+                # Validate: don't create invalid CDS (start >= end)
+                if new_cds_start >= new_cds_end:
+                    # Keep original coordinates if correction would be invalid
                     new_cds.append((cds_start, cds_end, phase))
+                else:
+                    new_cds.append((new_cds_start, new_cds_end, phase))
 
             transcript.cds = new_cds
 

@@ -322,6 +322,29 @@ helixforge qc report \
     -o qc_report.html
 ```
 
+### RNA-seq AED vs Combined AED
+
+**Important:** The AED calculated by `refine` and `evidence` commands is based **only on RNA-seq evidence**. This can be misleading for genes with good homology support but no expression in sampled tissues.
+
+The `qc aggregate` command calculates a **combined AED** that incorporates:
+- RNA-seq evidence (junction support + coverage)
+- Homology evidence (query coverage × identity)
+- Helixer confidence (prediction probability)
+
+This ensures genes are evaluated using all available evidence:
+
+| Scenario | RNA-seq AED | Combined AED |
+|----------|-------------|--------------|
+| Good RNA-seq, good homology | 0.1 | ~0.10 |
+| No RNA-seq, complete homology | 0.5 | ~0.26 |
+| Good RNA-seq, no homology | 0.2 | ~0.28 |
+| Neither | 0.5 | ~0.58 |
+
+The combined AED weights are configurable via CLI options:
+- `--aed-rnaseq-weight` (default: 0.4)
+- `--aed-homology-weight` (default: 0.4)
+- `--aed-confidence-weight` (default: 0.2)
+
 If you only have RNA-seq data (no HDF5 predictions), use the standalone `evidence` command:
 
 ```bash

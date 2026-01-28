@@ -660,10 +660,18 @@ class GFF3Writer:
             )
         )
 
-        # Write exons
-        for i, (start, end) in enumerate(transcript.exons, 1):
+        # Write exons (filter out invalid coordinates)
+        exon_num = 0
+        for start, end in transcript.exons:
+            if start >= end:
+                logger.warning(
+                    f"Skipping invalid exon in {transcript.transcript_id}: "
+                    f"start ({start}) >= end ({end})"
+                )
+                continue
+            exon_num += 1
             exon_attrs = {
-                "ID": f"{transcript.transcript_id}.exon{i}",
+                "ID": f"{transcript.transcript_id}.exon{exon_num}",
                 "Parent": transcript.transcript_id,
             }
             self._file.write(
@@ -677,10 +685,18 @@ class GFF3Writer:
                 )
             )
 
-        # Write CDS
-        for i, (start, end, phase) in enumerate(transcript.cds, 1):
+        # Write CDS (filter out invalid coordinates)
+        cds_num = 0
+        for start, end, phase in transcript.cds:
+            if start >= end:
+                logger.warning(
+                    f"Skipping invalid CDS in {transcript.transcript_id}: "
+                    f"start ({start}) >= end ({end})"
+                )
+                continue
+            cds_num += 1
             cds_attrs = {
-                "ID": f"{transcript.transcript_id}.CDS{i}",
+                "ID": f"{transcript.transcript_id}.CDS{cds_num}",
                 "Parent": transcript.transcript_id,
             }
             self._file.write(

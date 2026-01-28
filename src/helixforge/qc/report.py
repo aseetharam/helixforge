@@ -77,6 +77,9 @@ class ReportData:
         tier_data: Tier distribution data for charts.
         severity_data: Severity distribution data for charts.
         category_data: Category distribution data for charts.
+        flag_counts_data: Per-flag count data for charts.
+        aed_distribution_data: AED score distribution data for histogram.
+        confidence_distribution_data: Confidence score distribution data.
         flag_details: List of flag detail dicts.
         gene_table: List of gene data dicts for table.
         config: Report configuration.
@@ -89,6 +92,9 @@ class ReportData:
     tier_data: dict[str, Any]
     severity_data: dict[str, Any]
     category_data: dict[str, Any]
+    flag_counts_data: dict[str, Any]
+    aed_distribution_data: dict[str, Any]
+    confidence_distribution_data: dict[str, Any]
     flag_details: list[dict[str, Any]]
     gene_table: list[dict[str, Any]]
     config: ReportConfig
@@ -171,11 +177,14 @@ class QCReportGenerator:
         tier_data = self._prepare_tier_data(summary)
         severity_data = self._prepare_severity_data(summary)
         category_data = self._prepare_category_data(summary)
+        flag_counts_data = self._prepare_flag_counts_data(summary)
+        aed_distribution_data = self._prepare_aed_distribution(gene_qcs)
+        confidence_distribution_data = self._prepare_confidence_distribution(gene_qcs)
 
         # Prepare flag details
         flag_details = self._prepare_flag_details()
 
-        # Prepare gene table
+        # Prepare gene table (limited to avoid bloating HTML)
         gene_table = self._prepare_gene_table(gene_qcs)
 
         return ReportData(
@@ -186,6 +195,9 @@ class QCReportGenerator:
             tier_data=tier_data,
             severity_data=severity_data,
             category_data=category_data,
+            flag_counts_data=flag_counts_data,
+            aed_distribution_data=aed_distribution_data,
+            confidence_distribution_data=confidence_distribution_data,
             flag_details=flag_details,
             gene_table=gene_table,
             config=self.config,
@@ -274,6 +286,94 @@ class QCReportGenerator:
             "colors": chart_colors,
         }
 
+    def _prepare_flag_counts_data(self, summary: dict[str, Any]) -> dict[str, Any]:
+        """Prepare per-flag count chart data (top 15 flags)."""
+        flag_counts = summary.get("flag_counts", {})
+
+        # Sort by count descending, take top 15
+        sorted_flags = sorted(flag_counts.items(), key=lambda x: x[1], reverse=True)[:15]
+
+        labels = [f[0] for f in sorted_flags]
+        values = [f[1] for f in sorted_flags]
+
+        return {
+            "labels": labels,
+            "values": values,
+            "total_flags": len(flag_counts),
+        }
+
+    def _prepare_aed_distribution(self, gene_qcs: dict[str, GeneQC]) -> dict[str, Any]:
+        """Prepare AED score distribution data for histogram."""
+        # Collect RNA-seq AED values
+        rnaseq_aeds = []
+        combined_aeds = []
+
+        for qc in gene_qcs.values():
+            if qc.rnaseq_aed is not None:
+                rnaseq_aeds.append(qc.rnaseq_aed)
+            if qc.combined_aed is not None:
+                combined_aeds.append(qc.combined_aed)
+
+        # Create histogram bins (0.0-0.1, 0.1-0.2, ..., 0.9-1.0)
+        bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+        bin_labels = ["0.0-0.1", "0.1-0.2", "0.2-0.3", "0.3-0.4", "0.4-0.5",
+                      "0.5-0.6", "0.6-0.7", "0.7-0.8", "0.8-0.9", "0.9-1.0"]
+
+        def histogram(values: list[float], bins: list[float]) -> list[int]:
+            counts = [0] * (len(bins) - 1)
+            for v in values:
+                for i in range(len(bins) - 1):
+                    if bins[i] <= v < bins[i + 1]:
+                        counts[i] += 1
+                        break
+                    elif v == 1.0 and i == len(bins) - 2:
+                        counts[i] += 1
+                        break
+            return counts
+
+        rnaseq_hist = histogram(rnaseq_aeds, bins) if rnaseq_aeds else [0] * 10
+        combined_hist = histogram(combined_aeds, bins) if combined_aeds else [0] * 10
+
+        return {
+            "labels": bin_labels,
+            "rnaseq_values": rnaseq_hist,
+            "combined_values": combined_hist,
+            "rnaseq_mean": sum(rnaseq_aeds) / len(rnaseq_aeds) if rnaseq_aeds else None,
+            "combined_mean": sum(combined_aeds) / len(combined_aeds) if combined_aeds else None,
+            "rnaseq_count": len(rnaseq_aeds),
+            "combined_count": len(combined_aeds),
+        }
+
+    def _prepare_confidence_distribution(self, gene_qcs: dict[str, GeneQC]) -> dict[str, Any]:
+        """Prepare confidence score distribution data for histogram."""
+        scores = [qc.confidence_score for qc in gene_qcs.values() if qc.confidence_score is not None]
+
+        # Create histogram bins
+        bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+        bin_labels = ["0.0-0.1", "0.1-0.2", "0.2-0.3", "0.3-0.4", "0.4-0.5",
+                      "0.5-0.6", "0.6-0.7", "0.7-0.8", "0.8-0.9", "0.9-1.0"]
+
+        def histogram(values: list[float], bins: list[float]) -> list[int]:
+            counts = [0] * (len(bins) - 1)
+            for v in values:
+                for i in range(len(bins) - 1):
+                    if bins[i] <= v < bins[i + 1]:
+                        counts[i] += 1
+                        break
+                    elif v == 1.0 and i == len(bins) - 2:
+                        counts[i] += 1
+                        break
+            return counts
+
+        hist = histogram(scores, bins) if scores else [0] * 10
+
+        return {
+            "labels": bin_labels,
+            "values": hist,
+            "mean": sum(scores) / len(scores) if scores else None,
+            "count": len(scores),
+        }
+
     def _prepare_flag_details(self) -> list[dict[str, Any]]:
         """Prepare flag details for display."""
         details = []
@@ -309,6 +409,9 @@ class QCReportGenerator:
         tier_json = json.dumps(data.tier_data)
         severity_json = json.dumps(data.severity_data)
         category_json = json.dumps(data.category_data)
+        flag_counts_json = json.dumps(data.flag_counts_data)
+        aed_dist_json = json.dumps(data.aed_distribution_data)
+        confidence_dist_json = json.dumps(data.confidence_distribution_data)
         gene_table_json = json.dumps(data.gene_table)
 
         # Build HTML
@@ -348,7 +451,19 @@ class QCReportGenerator:
         html = html.replace("{{tier_data}}", tier_json)
         html = html.replace("{{severity_data}}", severity_json)
         html = html.replace("{{category_data}}", category_json)
+        html = html.replace("{{flag_counts_data}}", flag_counts_json)
+        html = html.replace("{{aed_dist_data}}", aed_dist_json)
+        html = html.replace("{{confidence_dist_data}}", confidence_dist_json)
         html = html.replace("{{gene_table_data}}", gene_table_json)
+
+        # AED summary stats
+        aed_data = data.aed_distribution_data
+        html = html.replace("{{rnaseq_aed_mean}}", f"{aed_data['rnaseq_mean']:.4f}" if aed_data['rnaseq_mean'] else "N/A")
+        html = html.replace("{{combined_aed_mean}}", f"{aed_data['combined_mean']:.4f}" if aed_data['combined_mean'] else "N/A")
+
+        # Gene table info
+        html = html.replace("{{genes_in_table}}", str(len(data.gene_table)))
+        html = html.replace("{{max_genes}}", str(data.config.max_genes_in_table))
 
         # Flag details table
         flag_rows = []
@@ -626,6 +741,14 @@ class QCReportGenerator:
                     <div class="score-value">{{avg_homology}}</div>
                     <div class="score-label">Avg Homology Score</div>
                 </div>
+                <div class="score-item">
+                    <div class="score-value">{{rnaseq_aed_mean}}</div>
+                    <div class="score-label">Mean RNA-seq AED</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-value">{{combined_aed_mean}}</div>
+                    <div class="score-label">Mean Combined AED</div>
+                </div>
             </div>
         </section>
 
@@ -635,6 +758,24 @@ class QCReportGenerator:
                 <div class="chart-container">
                     <h3>Tier Distribution</h3>
                     <canvas id="tierChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Confidence Score Distribution</h3>
+                    <canvas id="confidenceChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>AED Score Distribution</h3>
+                    <canvas id="aedChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Flag Analysis</h2>
+            <div class="charts-grid">
+                <div class="chart-container">
+                    <h3>Top 15 Flags by Occurrence</h3>
+                    <canvas id="flagCountsChart"></canvas>
                 </div>
                 <div class="chart-container">
                     <h3>Flag Severity Distribution</h3>
@@ -669,6 +810,10 @@ class QCReportGenerator:
 
         <section class="section">
             <h2>Gene Details</h2>
+            <p style="color: #666; margin-bottom: 15px;">
+                Showing {{genes_in_table}} of {{total_genes}} genes (limited to {{max_genes}} for performance).
+                Use the TSV output for complete data.
+            </p>
             <input type="text" id="geneFilter" placeholder="Filter genes by ID, tier, or flag...">
             <div class="table-container">
                 <table id="geneTable">
@@ -678,8 +823,8 @@ class QCReportGenerator:
                             <th>Tier</th>
                             <th>Flags</th>
                             <th>Confidence</th>
-                            <th>Splice</th>
-                            <th>Homology</th>
+                            <th>RNA-seq AED</th>
+                            <th>Combined AED</th>
                         </tr>
                     </thead>
                     <tbody id="geneTableBody">
@@ -698,6 +843,9 @@ class QCReportGenerator:
         const tierData = {{tier_data}};
         const severityData = {{severity_data}};
         const categoryData = {{category_data}};
+        const flagCountsData = {{flag_counts_data}};
+        const aedDistData = {{aed_dist_data}};
+        const confidenceDistData = {{confidence_dist_data}};
         const geneTableData = {{gene_table_data}};
 
         // Tier Chart
@@ -713,10 +861,79 @@ class QCReportGenerator:
             options: {
                 responsive: true,
                 plugins: {
-                    legend: {
-                        position: 'bottom',
-                    }
+                    legend: { position: 'bottom' }
                 }
+            }
+        });
+
+        // Confidence Distribution Chart
+        new Chart(document.getElementById('confidenceChart'), {
+            type: 'bar',
+            data: {
+                labels: confidenceDistData.labels,
+                datasets: [{
+                    label: 'Gene Count',
+                    data: confidenceDistData.values,
+                    backgroundColor: '#007bff',
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: `Mean: ${confidenceDistData.mean ? confidenceDistData.mean.toFixed(3) : 'N/A'}` }
+                },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+
+        // AED Distribution Chart
+        new Chart(document.getElementById('aedChart'), {
+            type: 'bar',
+            data: {
+                labels: aedDistData.labels,
+                datasets: [
+                    {
+                        label: 'RNA-seq AED',
+                        data: aedDistData.rnaseq_values,
+                        backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                    },
+                    {
+                        label: 'Combined AED',
+                        data: aedDistData.combined_values,
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    title: { display: true, text: 'Lower AED = Better Support' }
+                },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+
+        // Flag Counts Chart (horizontal bar for readability)
+        new Chart(document.getElementById('flagCountsChart'), {
+            type: 'bar',
+            data: {
+                labels: flagCountsData.labels,
+                datasets: [{
+                    label: 'Gene Count',
+                    data: flagCountsData.values,
+                    backgroundColor: '#6c757d',
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: `Total unique flags: ${flagCountsData.total_flags}` }
+                },
+                scales: { x: { beginAtZero: true } }
             }
         });
 
@@ -733,16 +950,8 @@ class QCReportGenerator:
             },
             options: {
                 responsive: true,
-                plugins: {
-                    legend: {
-                        display: false,
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
             }
         });
 
@@ -758,11 +967,7 @@ class QCReportGenerator:
             },
             options: {
                 responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                    }
-                }
+                plugins: { legend: { position: 'bottom' } }
             }
         });
 
@@ -774,13 +979,14 @@ class QCReportGenerator:
             data.forEach(gene => {
                 const tr = document.createElement('tr');
                 const tierClass = gene.tier === 'high' ? 'info' : gene.tier === 'medium' ? 'warning' : gene.tier === 'low' ? 'error' : 'critical';
+                const flags = gene.flag_codes ? gene.flag_codes.slice(0, 3).join(', ') + (gene.flag_codes.length > 3 ? '...' : '') : '';
                 tr.innerHTML = `
                     <td><code>${gene.gene_id}</code></td>
-                    <td><span class="badge severity-${tierClass}">${gene.tier}</span></td>
-                    <td>${gene.flag_codes ? gene.flag_codes.join(', ') : ''}</td>
-                    <td>${gene.confidence_score !== null ? gene.confidence_score.toFixed(3) : 'N/A'}</td>
-                    <td>${gene.splice_score !== null ? gene.splice_score.toFixed(3) : 'N/A'}</td>
-                    <td>${gene.homology_score !== null ? gene.homology_score.toFixed(3) : 'N/A'}</td>
+                    <td><span class="badge severity-${tierClass}">${gene.tier || 'N/A'}</span></td>
+                    <td title="${gene.flag_codes ? gene.flag_codes.join(', ') : ''}">${flags}</td>
+                    <td>${gene.confidence_score != null ? gene.confidence_score.toFixed(3) : 'N/A'}</td>
+                    <td>${gene.rnaseq_aed != null ? gene.rnaseq_aed.toFixed(3) : 'N/A'}</td>
+                    <td>${gene.combined_aed != null ? gene.combined_aed.toFixed(3) : 'N/A'}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -794,7 +1000,7 @@ class QCReportGenerator:
             const filter = e.target.value.toLowerCase();
             const filtered = geneTableData.filter(gene => {
                 return gene.gene_id.toLowerCase().includes(filter) ||
-                       gene.tier.toLowerCase().includes(filter) ||
+                       (gene.tier && gene.tier.toLowerCase().includes(filter)) ||
                        (gene.flag_codes && gene.flag_codes.some(f => f.toLowerCase().includes(filter)));
             });
             renderGeneTable(filtered);

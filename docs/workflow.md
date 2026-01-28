@@ -256,7 +256,7 @@ helixforge homology extract-proteins \
 
 # Search against database
 helixforge homology search \
-    --proteins predicted_proteins.fa \
+    --query predicted_proteins.fa \
     --database uniprot_plants.dmnd \
     -o homology_hits.tsv \
     --threads 16 \
@@ -272,11 +272,13 @@ helixforge homology validate \
 
 **Output:** TSV with homology validation metrics per gene.
 
+**Note:** The validation output includes ALL genes from the GFF, not just those with homology hits. Genes without hits are marked as `status: no_hit` with the `no_homology` flag. This ensures orphan genes and species-specific genes are retained in QC aggregation.
+
 ---
 
 ### Step 3: Aggregate QC Results
 
-Combine results from refine and homology into unified QC metrics.
+Combine results from refine and homology into unified QC metrics. This step calculates a **combined AED** that incorporates RNA-seq evidence, homology evidence, and Helixer confidence.
 
 ```bash
 # Using refine report (recommended)
@@ -284,9 +286,39 @@ helixforge qc aggregate \
     --refine-tsv refine_report.tsv \
     --homology-tsv homology_validation.tsv \
     -o qc_aggregated.tsv
+
+# Custom AED weights (for species with limited RNA-seq data)
+helixforge qc aggregate \
+    --refine-tsv refine_report.tsv \
+    --homology-tsv homology_validation.tsv \
+    -o qc_aggregated.tsv \
+    --aed-rnaseq-weight 0.3 \
+    --aed-homology-weight 0.5 \
+    --aed-confidence-weight 0.2
 ```
 
-**Output:** Combined TSV with all QC metrics and tier classifications per gene.
+**AED weight options:**
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--aed-rnaseq-weight` | 0.4 | Weight for RNA-seq evidence |
+| `--aed-homology-weight` | 0.4 | Weight for homology evidence |
+| `--aed-confidence-weight` | 0.2 | Weight for Helixer confidence |
+
+**Why combined AED matters:**
+The traditional AED (from `refine`) is based only on RNA-seq evidence. This can be misleading for genes with good homology but no expression in sampled tissues. The combined AED ensures genes are evaluated using all available evidence.
+
+| Scenario | RNA-seq AED | Combined AED |
+|----------|-------------|--------------|
+| Good RNA-seq, good homology | 0.1 | ~0.10 |
+| No RNA-seq, complete homology | 0.5 | ~0.26 |
+| Good RNA-seq, no homology | 0.2 | ~0.28 |
+| Neither | 0.5 | ~0.58 |
+
+**Output columns:**
+- `gene_id`, `tier`, `flag_count`, `flag_codes`, `max_severity`
+- `confidence_score`, `splice_score`, `homology_score`
+- `rnaseq_aed` - RNA-seq only AED (from refine report)
+- `combined_aed` - Multi-evidence AED (RNA-seq + homology + confidence)
 
 ---
 
@@ -392,7 +424,7 @@ helixforge homology extract-proteins \
     -o "$OUTDIR/proteins.fa"
 
 helixforge homology search \
-    --proteins "$OUTDIR/proteins.fa" \
+    --query "$OUTDIR/proteins.fa" \
     --database "$PROTEINS" \
     -o "$OUTDIR/homology_hits.tsv" \
     --threads 8
@@ -438,7 +470,7 @@ helixforge confidence \
 
 # 2. Validate with proteins
 helixforge homology extract-proteins --gff predictions.gff3 --genome genome.fa -o proteins.fa
-helixforge homology search --proteins proteins.fa --database uniprot.dmnd -o hits.tsv
+helixforge homology search --query proteins.fa --database uniprot.dmnd -o hits.tsv
 helixforge homology validate --search-results hits.tsv --gff predictions.gff3 -o validation.tsv
 
 # 3. QC and filter

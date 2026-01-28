@@ -436,6 +436,10 @@ class GeneQC:
     splice_score: float | None = None
     homology_score: float | None = None
 
+    # Evidence scores
+    rnaseq_aed: float | None = None  # RNA-seq only AED (renamed from aed for clarity)
+    combined_aed: float | None = None  # Combined AED incorporating all evidence types
+
     # Detailed metrics from each module
     confidence_metrics: dict[str, Any] = attrs.Factory(dict)
     splice_metrics: dict[str, Any] = attrs.Factory(dict)
@@ -622,6 +626,8 @@ class GeneQC:
             "confidence_score": self.confidence_score,
             "splice_score": self.splice_score,
             "homology_score": self.homology_score,
+            "rnaseq_aed": self.rnaseq_aed,
+            "combined_aed": self.combined_aed,
             "confidence_metrics": self.confidence_metrics,
             "splice_metrics": self.splice_metrics,
             "homology_metrics": self.homology_metrics,
