@@ -333,7 +333,17 @@ helixforge qc report \
     --title "Genome Annotation QC"
 ```
 
-**Output:** Interactive HTML report with statistics and visualizations.
+**Report Contents:**
+
+| Section | Description |
+|---------|-------------|
+| **Summary** | Tier counts, average scores, mean RNA-seq AED, mean Combined AED |
+| **Distribution Charts** | Tier pie chart, confidence histogram, AED histogram (RNA-seq vs Combined) |
+| **Flag Analysis** | Top 15 flags by gene count, severity distribution, category distribution |
+| **QC Flags Reference** | Table of all possible flags with descriptions and severity levels |
+| **Gene Details** | Searchable table (limited to 1000 genes for HTML performance) |
+
+> **Note:** The gene table is limited to 1000 genes to keep the HTML file size manageable. Use the TSV output from `qc aggregate` for complete data on all genes.
 
 ---
 

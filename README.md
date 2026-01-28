@@ -49,7 +49,7 @@ helixforge homology validate --search-results hits.tsv --gff refined.gff3 -o val
 # Aggregate QC results (calculates combined AED from RNA-seq + homology + confidence)
 helixforge qc aggregate --refine-tsv refine_report.tsv --homology-tsv validation.tsv -o qc.tsv
 
-# Generate HTML report
+# Generate HTML report (includes AED distributions, flag analysis, tier charts)
 helixforge qc report --qc-tsv qc.tsv -o qc_report.html
 
 # Create tiered output GFF files

@@ -447,6 +447,10 @@ helixforge qc aggregate \
     --aed-homology-weight 0.5 \
     --aed-confidence-weight 0.2
 
+# Generate HTML report with:
+# - Tier distribution, confidence histogram, AED distribution charts
+# - Top flags by occurrence, severity/category distributions
+# - Gene details table (limited to 1000 for performance)
 helixforge qc report \
     --qc-tsv qc_results.tsv \
     -o qc_report.html
