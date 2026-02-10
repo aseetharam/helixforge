@@ -62,15 +62,17 @@ mkdir -p genome helixer_output rnaseq bam databases outputs results scripts
 
 # Download TAIR10 genome
 cd genome
-wget https://www.arabidopsis.org/download_files/Genes/TAIR10_genome_release/TAIR10_chromosome_files/TAIR10_chr_all.fas
-mv TAIR10_chr_all.fas athaliana.fasta
+wget https://www.arabidopsis.org/api/download-files/download?filePath=Genes/TAIR10_genome_release/TAIR10_chromosome_files/TAIR10_chr_all.fas.gz
+# need to gunzip and then rename
+gunzip download\?filePath\=Genes%2FTAIR10_genome_release%2FTAIR10_chromosome_files%2FTAIR10_chr_all.fas.gz 
+mv download\?filePath\=Genes%2FTAIR10_genome_release%2FTAIR10_chromosome_files%2FTAIR10_chr_all.fas athaliana.fasta
 samtools faidx athaliana.fasta
 cd ..
 
 # Download Araport11 annotation (for comparison)
-wget https://www.arabidopsis.org/download_files/Genes/Araport11_genome_release/Araport11_GFF3_genes_transposons.current.gff.gz
-gunzip Araport11_GFF3_genes_transposons.current.gff.gz
-mv Araport11_GFF3_genes_transposons.current.gff reference_araport11.gff3
+wget https://www.arabidopsis.org/api/download-files/download?filePath=Genes/Araport11_genome_release/Araport11_GFF3_genes_transposons.20250813.gff.gz
+gunzip download?filePath=Genes%2FAraport11_genome_release%2FAraport11_GFF3_genes_transposons.20250813.gff
+mv download\?filePath\=Genes%2FAraport11_genome_release%2FAraport11_GFF3_genes_transposons.20250813.gff reference_araport11.gff3
 ```
 
 ---
@@ -117,13 +119,7 @@ apptainer exec --nv ${SIF} HybridModel.py \
 
 # Step 3: Generate GFF3 from predictions
 echo "Step 3: Generating GFF3..."
-apptainer exec ${SIF} helixer_post_bin \
-    ${OUTDIR}/${SPECIES}_predictions.h5 \
-    ${OUTDIR}/${SPECIES}_helixer.gff3 \
-    --window-size 100 \
-    --edge-threshold 0.1 \
-    --peak-threshold 0.8 \
-    --min-coding-length 100
+apptainer exec ${SIF} helixer_post_bin ${OUTDIR}/${SPECIES}_input.h5 ${OUTDIR}/${SPECIES}_predictions.h5 100 0.1 0.8 100 ${OUTDIR}/${SPECIES}_helixer.gff3
 
 echo "Helixer complete. Files:"
 ls -lh ${OUTDIR}/
