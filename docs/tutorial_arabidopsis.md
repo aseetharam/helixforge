@@ -288,8 +288,7 @@ helixforge parallel plan \
     --gff helixer_output/Arabidopsis-thaliana_helixer.gff3 \
     --strategy adaptive \
     --target-chunks 20 \
-    -o chunks.json \
-    --summary
+    -o chunks.json 
 
 # Expected output: ~20 chunks covering all chromosomes
 ```
