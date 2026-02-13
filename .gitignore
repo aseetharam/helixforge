@@ -132,7 +132,6 @@ Thumbs.db
 *.vcf.gz.tbi
 
 # Large data directories
-data/
 output/
 results/
 temp/

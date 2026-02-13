@@ -1,0 +1,74 @@
+{
+  "donor": {
+    "description": "Plant donor splice site PWM (-3 to +6 around GT)",
+    "positions": [-3, -2, -1, 1, 2, 3, 4, 5, 6],
+    "offset": 3,
+    "site_type": "donor",
+    "matrix": [
+      [0.35, 0.35, 0.15, 0.15],
+      [0.60, 0.10, 0.20, 0.10],
+      [0.10, 0.05, 0.80, 0.05],
+      [0.00, 0.00, 1.00, 0.00],
+      [0.00, 0.00, 0.00, 1.00],
+      [0.55, 0.05, 0.25, 0.15],
+      [0.65, 0.05, 0.15, 0.15],
+      [0.15, 0.05, 0.60, 0.20],
+      [0.20, 0.10, 0.20, 0.50]
+    ],
+    "background": [0.27, 0.23, 0.23, 0.27],
+    "consensus": "MAG|GTRAGT",
+    "notes": [
+      "Position -3: M (A/C) - purine preferred",
+      "Position -2: A strongly preferred",
+      "Position -1: G highly conserved",
+      "Position +1: G invariant (part of GT)",
+      "Position +2: T invariant (part of GT)",
+      "Position +3: A/R (purine) preferred",
+      "Position +4: A preferred",
+      "Position +5: G preferred",
+      "Position +6: T preferred"
+    ]
+  },
+  "acceptor": {
+    "description": "Plant acceptor splice site PWM (-14 to +1 around AG)",
+    "positions": [-14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1],
+    "offset": 14,
+    "site_type": "acceptor",
+    "matrix": [
+      [0.15, 0.35, 0.15, 0.35],
+      [0.15, 0.35, 0.15, 0.35],
+      [0.15, 0.35, 0.15, 0.35],
+      [0.15, 0.35, 0.15, 0.35],
+      [0.15, 0.35, 0.15, 0.35],
+      [0.15, 0.35, 0.15, 0.35],
+      [0.15, 0.35, 0.15, 0.35],
+      [0.12, 0.38, 0.12, 0.38],
+      [0.12, 0.38, 0.12, 0.38],
+      [0.12, 0.38, 0.12, 0.38],
+      [0.15, 0.40, 0.10, 0.35],
+      [0.25, 0.25, 0.25, 0.25],
+      [0.15, 0.60, 0.10, 0.15],
+      [0.70, 0.10, 0.10, 0.10],
+      [0.00, 0.00, 1.00, 0.00],
+      [0.15, 0.15, 0.50, 0.20]
+    ],
+    "background": [0.27, 0.23, 0.23, 0.27],
+    "consensus": "YYYYYYYYYYNCAG|G",
+    "notes": [
+      "Positions -14 to -5: Pyrimidine tract (Y = C/T)",
+      "Position -4: Y/C preferred",
+      "Position -3: N (any base)",
+      "Position -2: C preferred",
+      "Position -1: A highly conserved",
+      "Position 0: G invariant (part of AG)",
+      "Position +1: G preferred"
+    ]
+  },
+  "source": "Derived from Arabidopsis thaliana, Oryza sativa, Zea mays canonical junctions",
+  "version": "1.0",
+  "references": [
+    "Brown JWS et al. (1996) Arabidopsis splicing",
+    "Zhu W et al. (2003) Rice splice sites",
+    "Wang BB & Brendel V (2006) Plant splice site signals"
+  ]
+}
