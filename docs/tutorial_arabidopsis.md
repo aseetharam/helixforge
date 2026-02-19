@@ -394,7 +394,7 @@ grep -c "gene" results/refined_genes.gff3
 ## Part 5: Homology Validation
 
 ### 5.1 Setup Protein Database
-
+This requires Diamond. See https://github.com/bbuchfink/diamond/wiki for installation instructions. Alternatively, Diamond can be installed in a Conda environment (see https://anaconda.org/channels/bioconda/packages/diamond/overview).
 ```bash
 # List available databases
 helixforge homology list-databases
@@ -509,8 +509,8 @@ firefox results/qc_report.html &
 ```bash
 # Generate quality-filtered GFF files
 helixforge qc tiered-output \
-    --qc-results results/qc_aggregated.tsv \
-    --gff results/refined_genes.gff3 \
+    --qc-tsv results/qc_aggregated.tsv \
+    --input-gff results/refined_genes.gff3 \
     -o results/tiered/ \
     --prefix athaliana
 
@@ -537,7 +537,7 @@ wc -l results/tiered/*.gff3
 # Count genes per tier
 echo "=== Gene Counts by Tier ==="
 for tier in high medium low rejected; do
-    count=$(grep -c "^[^#]" results/tiered/athaliana_${tier}.gff3 2>/dev/null | grep "gene" || echo 0)
+    count=$(grep -c $'\tgene\t' results/tiered/athaliana_${tier}.gff3 2>/dev/null || echo 0)
     echo "${tier}: ${count}"
 done
 
@@ -611,8 +611,8 @@ helixforge refine \
 ```bash
 # Test confidence scoring without RNA-seq
 helixforge confidence \
-    --helixer-h5 helixer_output/Arabidopsis-thaliana_predictions.h5 \
-    --helixer-gff helixer_output/Arabidopsis-thaliana_helixer.gff3 \
+    --predictions helixer_output/Arabidopsis-thaliana_predictions.h5 \
+    --gff helixer_output/Arabidopsis-thaliana_helixer.gff3 \
     --genome genome/athaliana.fasta \
     --scaffold Chr1 \
     -o results/chr1_confidence_only.tsv
