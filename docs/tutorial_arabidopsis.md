@@ -476,12 +476,14 @@ head -1 results/qc_aggregated.tsv | tr '\t' '\n'
 
 - `gene_id` - Gene identifier
 - `tier` - Quality tier (high/medium/low/reject)
+- `flag_count` - Number of QC flags on that gene model
+- `flag_codes` - Quality flags
+- `max_severity` - Highest severity level
 - `confidence_score` - Helixer prediction confidence
 - `splice_score` - Junction support ratio
 - `homology_score` - Homology coverage × identity
 - `rnaseq_aed` - RNA-seq only AED
 - `combined_aed` - Multi-evidence AED
-- `flag_codes` - Quality flags
 
 ### 6.2 Generate QC Report
 
@@ -730,22 +732,24 @@ For Arabidopsis thaliana with 56 tissue RNA-seq samples:
 
 # 1. Refine with parallel processing
 helixforge parallel plan --genome genome/athaliana.fasta --gff helixer_output/Arabidopsis-thaliana_helixer.gff3 --strategy adaptive --target-chunks 20 -o chunks.json
-helixforge parallel tasks --chunk-plan chunks.json --command "helixforge refine --helixer-h5 helixer_output/Arabidopsis-thaliana_predictions.h5 --helixer-gff helixer_output/Arabidopsis-thaliana_helixer.gff3 --rnaseq-bam-list bam_files.txt --genome genome/athaliana.fasta --region {seqid}:{start}-{end} --chunk-id {chunk_id} --output outputs/{chunk_id}_refined.gff3 --report outputs/{chunk_id}_report.tsv --min-reads 5 --min-tissues 2" --output tasks.txt
+helixforge parallel tasks --chunk-plan chunks.json  --command "helixforge refine --helixer-h5 helixer_output/Arabidopsis-thaliana_predictions.h5 --helixer-gff helixer_output/Arabidopsis-thaliana_helixer.gff3  --rnaseq-bam-list bam_files.txt --genome genome/athaliana.fasta --region {seqid}:{start}-{end} --chunk-id {chunk_id}  --output outputs/{chunk_id}_refined.gff3   --report outputs/{chunk_id}_refine_report.tsv --splice-details outputs/{chunk_id}_splice_details.tsv --max-shift 15  --min-reads 5 --min-tissues 2 --adjust-boundaries --min-coverage 5 --verbose" --output tasks.txt  --output-dir outputs/
 hs cluster tasks.txt --num-tasks 8
 
 # 2. Aggregate results
 helixforge parallel aggregate --input-dir outputs/ --pattern '*_refined.gff3' -o results/refined_genes.gff3 --type merge_gff
-helixforge parallel aggregate --input-dir outputs/ --pattern '*_report.tsv' -o results/refine_report.tsv --type merge_tsv
+helixforge parallel aggregate  --input-dir outputs/ --pattern '*_refine_report.tsv' -o results/refine_report.tsv --type merge_tsv
+# Merge splice details:
+helixforge parallel aggregate --input-dir outputs/ --pattern '*_splice_details.tsv' -o results/splice_details.tsv --type merge_tsv
 
 # 3. Homology validation
-helixforge homology extract-proteins --gff results/refined_genes.gff3 --genome genome/athaliana.fasta -o results/proteins.fa --longest-isoform
-helixforge homology search --query results/proteins.fa --database databases/swissprot_plants.dmnd -o results/hits.tsv --threads 16
-helixforge homology validate --search-results results/hits.tsv --gff results/refined_genes.gff3 -o results/homology.tsv
+helixforge homology extract-proteins --gff results/refined_genes.gff3 --genome genome/athaliana.fasta -o results/predicted_proteins.fa --longest-isoform
+helixforge homology search --query results/predicted_proteins.fa --database databases/swissprot_plants.dmnd -o results/homology_hits.tsv  --threads 16 --evalue 1e-5
+helixforge homology validate --search-results results/homology_hits.tsv --gff results/refined_genes.gff3 -o results/homology_validation.tsv --thresholds relaxed --chimera-report results/chimeras.tsv --fragment-report results/fragments.tsv --output-gff results/genes_with_homology.gff3
 
 # 4. QC and reporting
-helixforge qc aggregate --refine-tsv results/refine_report.tsv --homology-tsv results/homology.tsv -o results/qc.tsv
-helixforge qc report --qc-tsv results/qc.tsv -o results/report.html
-helixforge qc tiered-output --qc-results results/qc.tsv --gff results/refined_genes.gff3 -o results/tiered/
+helixforge qc aggregate --refine-tsv results/refine_report.tsv --homology-tsv results/homology_validation.tsv -o results/qc_aggregated.tsv --aed-rnaseq-weight 0.4 --aed-homology-weight 0.4 --aed-confidence-weight 0.2
+helixforge qc report --qc-tsv results/qc_aggregated.tsv -o results/qc_report.html --title "Arabidopsis thaliana Annotation QC - HelixForge"
+helixforge qc tiered-output --qc-tsv results/qc_aggregated.tsv --input-gff results/refined_genes.gff3 -o results/tiered/ --prefix athaliana
 ```
 
 ---
