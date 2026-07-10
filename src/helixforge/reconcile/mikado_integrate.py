@@ -80,7 +80,7 @@ class IdAllocator:
     and every existing test + the M3 golden counts hold.
 
     **Allocation is amortized O(1)** (Phase 20): the historical scanner rebuilt a
-    ``used`` set over the *entire* ``id_map`` on every call — Θ(N²) over a fresh
+    ``used`` set over the *entire* ``id_map`` on every call, Θ(N²) over a fresh
     whole-genome run. This version seeds ``_used`` and the two cursors **once**,
     lazily, from the first ``id_map`` it sees, then advances a monotonically
     rising cursor past ``_used`` and records each number it hands out. The
@@ -121,8 +121,8 @@ class IdAllocator:
         """Lowest free HFG number at/above the policy's (novel) base, in O(1) amortized.
 
         On the first call ``id_map`` seeds the allocation state (so a chunk whose
-        seed map carries a foreign/out-of-range HFG — e.g. a locus that moved
-        chunks across a re-partition — still skips it, exactly like the historical
+        seed map carries a foreign/out-of-range HFG, e.g. a locus that moved
+        chunks across a re-partition, still skips it, exactly like the historical
         scanner). Subsequent calls do not rescan ``id_map``; they advance the
         cursor past the recorded ``_used`` set and record the returned number.
         """
@@ -144,7 +144,7 @@ class IdAllocator:
 
 
 # The historical global policy template (base=1, novel_base=90000). Kept as a
-# defined symbol for back-compat; it is NOT used as a shared mutable singleton —
+# defined symbol for back-compat; it is NOT used as a shared mutable singleton,
 # callers allocate a fresh IdAllocator() per run/call so state never leaks
 # across independent runs (Phase 20 §1.1).
 _DEFAULT_ALLOCATOR = IdAllocator()
@@ -361,7 +361,7 @@ def _decompose_many_to_many(
     in tangled plant tandem arrays it carries real structure, so it
     is retained as a novel-style locus (subject to the ``admit_novel`` gate and
     flagged FROM_TANGLED_LOCUS). When not admitted it still earns an audit record
-    via the normal novel path — never silently lost."""
+    via the normal novel path, never silently lost."""
     # Memoize structural overlap per (helixer, mikado) pair so it is computed
     # once, not recomputed in the max(...) and any later regrouping (Phase 20 §2.5).
     overlap_cache: dict[tuple[int, int], float] = {}
@@ -414,7 +414,7 @@ def _has_bridging_introns(
     tandem arrays when a ``junctions`` set/index is supplied: the bridging intron
     must also correspond to a splice junction that
 
-    * is **canonical** — a non-canonical bridge is rejected, and
+    * is **canonical**, a non-canonical bridge is rejected, and
     * is supported by **>= ``min_gap_reads`` reads** spanning the inter-genic gap
       specifically (not merely *some* intron elsewhere in the Mikado locus).
 
@@ -479,7 +479,7 @@ def _kmer_set(seq: str, k: int) -> frozenset[str]:
 def kmer_identity(seq_a: str, seq_b: str, k: int = PARALOG_IDENTITY_K) -> float:
     """Alignment-free pairwise identity proxy: k-mer Jaccard of two sequences.
 
-    A cheap recent-duplication / homeolog signal — near-identical
+    A cheap recent-duplication / homeolog signal, near-identical
     adjacent loci yield a Jaccard near 1.0. Returns 0.0 when either sequence is
     shorter than ``k`` (no shared k-mers possible). Order-independent and
     strand-naive: the caller passes coding-direction CDS/exon sequence.
@@ -549,7 +549,7 @@ def assign_tier(
 
     Tier 1 = coherent CDS + protein-homology support. Homology is a hit accession
     (``protein_id``) OR a positive BLAST/DIAMOND score (``blast_score`` from the
-    metrics TSV) — Mikado's loci GFF3 carries no accession, so the BLAST score is
+    metrics TSV), Mikado's loci GFF3 carries no accession, so the BLAST score is
     the real signal.
 
     A ``helixer_backstop`` gene that has been **rescued** with a valid projected
@@ -582,7 +582,7 @@ def _renumber(
     """Order isoforms and re-id as ``gene_id.N`` (primary = .1).
 
     Default ordering is by Mikado ``combined_score`` (desc), tie-broken by
-    ``transcript_id`` — the historical behavior every existing caller and test
+    ``transcript_id``, the historical behavior every existing caller and test
     relies on, so omitting ``order`` is byte-for-byte unchanged. When ``order`` is
     supplied (a list of ``transcript_id`` strings, e.g. the TRaCE election result;
     Phase 33b D2), the isoforms are numbered in *that* order instead of re-sorting
@@ -623,11 +623,11 @@ def _intrinsic_helixer_cds(
 ) -> tuple[list[CDSSegment] | None, bool]:
     """The Helixer model's own CDS for a backstop transcript, plus a partial flag.
 
-    A Helixer-only (backstop) gene carries the CDS Helixer itself predicted — this
+    A Helixer-only (backstop) gene carries the CDS Helixer itself predicted, this
     is the model's *intrinsic* ORF, and a gene must be called coding on the
     strength of that ORF, not only when an external miniprot/TransDecoder backstop
     re-derives one. The CDS is taken verbatim from the Helixer GFF3 (already
-    sorted, within-exon, GFF3-phased) — never adjusted (CDS boundaries come from
+    sorted, within-exon, GFF3-phased), never adjusted (CDS boundaries come from
     the model, we only validate). Returns ``(None, False)`` when Helixer predicted
     no CDS (a genuine non-coding prediction) or the CDS is not contained in the
     transcript's exons (e.g. after a locus merge dropped the CDS). The partial
@@ -686,7 +686,7 @@ def build_reconciled_gene(
         h = helixer_locus_or_ids
         exons = list(h.exons) if h.exons else [Exon(h.start, h.end)]
         # Carry the Helixer model's own CDS so the gene is coding on the strength
-        # of its intrinsic ORF — not only when a miniprot/TransDecoder backstop
+        # of its intrinsic ORF: not only when a miniprot/TransDecoder backstop
         # re-derives one. Without this every Helixer-only gene loses its ORF here
         # and is mis-called non-coding downstream.
         cds, cds_partial = _intrinsic_helixer_cds(h, exons)
@@ -798,7 +798,7 @@ def _filter_redundant(
 
     ordered = sorted(transcripts, key=lambda t: (-score(t), t.transcript_id))
     # Memoize each transcript's frozenset intron chain once, not per pair
-    # (Phase 20 §2.5) — the O(k²) sweep below would otherwise recompute it.
+    # (Phase 20 §2.5), the O(k²) sweep below would otherwise recompute it.
     chain_cache: dict[int, frozenset[tuple[int, int]]] = {}
 
     def chain_of(t: TranscriptCandidate) -> frozenset[tuple[int, int]]:
@@ -860,7 +860,7 @@ def reconcile(
 ) -> tuple[list[ReconciledGene], dict[str, str], list[IsoformAdmission]]:
     """Reconcile Mikado loci onto the Helixer gene set.
 
-    Returns ``(genes, id_map, admissions)`` — the reconciled genes (sorted by
+    Returns ``(genes, id_map, admissions)``, the reconciled genes (sorted by
     seqid/start), the updated Helixer-id → HFG map (persist for stable IDs), and
     the isoform-admission audit.
 
@@ -870,8 +870,8 @@ def reconcile(
     its reserved-range allocator so genome-wide IDs stay collision-free (§C3).
 
     ``stats`` (an optional :class:`~helixforge.reconcile.runstats.RunStats`) is
-    bumped at each decision site — splits, merge accept/reject, redundant-isoform
-    drops — when supplied. It only **observes**: increments never alter control
+    bumped at each decision site, splits, merge accept/reject, redundant-isoform
+    drops, when supplied. It only **observes**: increments never alter control
     flow, so the gene/tier/origin/AS counts and HFG ids are unchanged.
 
     Paralog/tandem-array merge guards: when a
@@ -974,7 +974,7 @@ def reconcile(
             # constituent Helixer id to one shared HFG in ``id_map`` (an
             # accepted merge keeps the lowest id for all members).
             # Releasing the loci again must NOT hand that single id to more than
-            # one gene — that emits duplicate gene/transcript IDs, violating the
+            # one gene: that emits duplicate gene/transcript IDs, violating the
             # stable-unique-ID guarantee (the scorer:stats IndexError crash; see
             # assessment-v4.md §2.3). The lowest-start (representative) locus
             # keeps the canonical id; any later locus whose id would collide is

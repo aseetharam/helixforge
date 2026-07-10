@@ -1,15 +1,15 @@
 """HyperShell execution backend (subprocess-first).
 
 HyperShell (https://github.com/hypershell/hypershell) is a distributed task
-runner. This backend drives it as an **external CLI** — the same subprocess
-contract every other external tool follows — so the core install needs no
+runner. This backend drives it as an **external CLI**, the same subprocess
+contract every other external tool follows, so the core install needs no
 ``hypershell`` Python dependency (it is an optional ``helixforge[hpc]`` extra
 that simply puts the ``hs`` command on PATH). Two entry points:
 
-- :func:`run_hypershell` — expand the plan into the same executor-agnostic task
+- :func:`run_hypershell`, expand the plan into the same executor-agnostic task
   file ``parallel tasks`` produces, then run it with ``hs cluster``. The commands
   are byte-identical to every other executor, so there is no new coordinate risk.
-- :func:`write_hypershell_plan` — emit a HyperShell-native chunk plan JSON
+- :func:`write_hypershell_plan`, emit a HyperShell-native chunk plan JSON
   (targets the unreleased ``hs cluster --chunk-plan`` feature, hypershell#37) with
   per-chunk fields pre-resolved to CLI-ready strings, so HyperShell's ``{key}``
   substitution can never mis-handle coordinates. Dependency-free.
@@ -93,7 +93,7 @@ def run_hypershell(
         proc = _runner(argv, text=True, check=False)
     except FileNotFoundError as exc:
         raise RuntimeError(
-            f"`{hs_bin}` not found — install HyperShell (`pip install "
+            f"`{hs_bin}` not found, install HyperShell (`pip install "
             f"helixforge[hpc]`) or point --hs-bin at it. argv: {argv}"
         ) from exc
     if proc.returncode != 0:
@@ -119,7 +119,7 @@ def write_hypershell_plan(
     Targets ``hs cluster --chunk-plan <json> --template <tmpl>`` (hypershell#37,
     unreleased). Each chunk carries pre-resolved, CLI-ready fields (``chunk_id``,
     ``region``, ``id_start``, ``novel_start``, ``output_dir``) so HyperShell's
-    ``{key}`` substitution produces the exact command the tasks.txt path would —
+    ``{key}`` substitution produces the exact command the tasks.txt path would,
     HelixForge owns the coordinate conversion, not HyperShell. Single-region
     chunks only (packed multi-region chunks must use the tasks.txt path).
 
@@ -130,7 +130,7 @@ def write_hypershell_plan(
         if len(c.regions) != 1:
             raise NotImplementedError(
                 f"chunk {c.chunk_id} spans {len(c.regions)} regions; the HyperShell "
-                "native plan supports single-region chunks only — partition with "
+                "native plan supports single-region chunks only: partition with "
                 "pack_small_scaffolds=False, or use `run_hypershell` (tasks.txt)."
             )
         v = _chunk_variables(c, Path(output_dir))

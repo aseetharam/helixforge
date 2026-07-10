@@ -21,7 +21,7 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HelixForge — {gene_id}</title>
+<title>HelixForge, {gene_id}</title>
 <style>
  body {{ font-family: system-ui, sans-serif; margin: 1.5rem; color: #222; }}
  h1 {{ font-size: 1.2rem; }}
@@ -150,7 +150,7 @@ _INDEX_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HelixForge — gene index</title>
+<title>HelixForge, gene index</title>
 <style>
  body {{ font-family: system-ui, sans-serif; margin: 1.5rem; color: #222; }}
  table {{ border-collapse: collapse; width: 100%; }}

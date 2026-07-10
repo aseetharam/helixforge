@@ -28,12 +28,12 @@ def build_gffutils_db(
 
     The single home for the ``create_db(..., dbfn=":memory:", force=True)`` call
     that ``GFF3Parser``, ``MiniprotParser`` and ``parse_loci_gff3`` each made on
-    every construction — a full re-parse + index build with no caching.
+    every construction, a full re-parse + index build with no caching.
 
-    * ``dbfn=None`` (default): the historical in-memory DB, rebuilt every time —
+    * ``dbfn=None`` (default): the historical in-memory DB, rebuilt every time,
       byte-for-byte unchanged from before, so existing tests/timings hold.
     * ``dbfn`` given + the file already exists + ``keep_db=True``: open and
-      **reuse** the on-disk DB via ``FeatureDB`` — no re-parse of the GFF3.
+      **reuse** the on-disk DB via ``FeatureDB``, no re-parse of the GFF3.
     * ``dbfn`` given + the file exists + ``keep_db=False``: rebuild it
       (``force=True``), treating the existing file as stale.
     * ``dbfn`` given + the file is absent: build it on disk (``force=False``).
@@ -255,16 +255,16 @@ def _attrs(pairs: list[tuple[str, Any]]) -> str:
 class GFF3Writer:
     """Hand-rolled GFF3 writer for ``ReconciledGene`` objects.
 
-    Spec-completeness knobs — all
+    Spec-completeness knobs, all
     optional; **omitting every one keeps the output byte-for-byte identical** to
     the historical ``##gff-version 3``-only header, so existing callers/tests are
     unchanged:
 
-    * ``sequence_regions`` — ``{seqid: length}``; emits one ``##sequence-region
+    * ``sequence_regions``, ``{seqid: length}``; emits one ``##sequence-region
       <seqid> 1 <len>`` directive per contig (1-based inclusive per the spec).
-    * ``provenance`` — an object exposing ``to_gff3_lines()`` (see
+    * ``provenance``, an object exposing ``to_gff3_lines()`` (see
       :mod:`helixforge.provenance`); its ``#!`` lines are written as comments.
-    * ``embed_fasta`` — a genome FASTA path; its sequence is appended after a
+    * ``embed_fasta``, a genome FASTA path; its sequence is appended after a
       ``##FASTA`` directive so the GFF3 is fully self-describing.
     """
 

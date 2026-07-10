@@ -1,4 +1,4 @@
-"""Ablation engine — the manuscript figure."""
+"""Ablation engine: the manuscript figure."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ ABLATION_VARIANTS: dict[str, dict[str, Any]] = {
     "strict_vs_permissive": {"scoring_profile": "permissive"},
 }
 
-# Knobs that change ONLY the pick / alternative-splicing stage — the prepared
+# Knobs that change ONLY the pick / alternative-splicing stage, the prepared
 # transcripts and the serialise DB are identical to the baseline, so a variant
 # toggling only these can reuse the baseline's Mikado artifacts and re-run pick
 # alone (``PipelineConfig.reuse_mikado_dir``). ``helixer_support_weight`` (external
@@ -129,7 +129,7 @@ def run_ablation(
     across variants so the rows are directly comparable.
 
     To keep the ablation tractable, the full-Mikado baseline (``full``) runs
-    first; pick-only variants (``no_pad``, ``strict_vs_permissive`` — see
+    first; pick-only variants (``no_pad``, ``strict_vs_permissive``, see
     :data:`PICK_ONLY_KNOBS`) then **reuse** its prepared transcripts + serialise
     DB and re-run only ``mikado pick``. Variants that change an upstream stage
     (``no_helixer_support``, ``no_reference_flag``) re-run Mikado in full. Output

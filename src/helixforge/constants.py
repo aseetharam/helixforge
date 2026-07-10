@@ -27,7 +27,7 @@ CROSS_CHECK_OVERLAP = 0.8
 # Minimum exon length the junction-correction transaction will accept; below it
 # the correction reverts (a flagged gene always beats a destroyed one).
 MIN_EXON_BP = 3
-# [BIOLOGY: per-species override candidate] Minimum intron length — a splicing
+# [BIOLOGY: per-species override candidate] Minimum intron length, a splicing
 # assumption. A "correction" producing a sub-20 bp gap is rejected as implausible.
 MIN_INTRON_BP = 20
 
@@ -66,13 +66,13 @@ PARALOG_IDENTITY_THRESHOLD = 0.9
 
 # --- non-coding biotype classification (reconcile/biotype.py) ---
 # [BIOLOGY] Minimum spliced-transcript length (nt) for
-# a lncRNA call — the GENCODE/Ensembl operational lncRNA floor. An expressed,
+# a lncRNA call: the GENCODE/Ensembl operational lncRNA floor. An expressed,
 # multi-exonic, ORF-less locus shorter than this is left ncRNA_undetermined rather
 # than asserted to be a long non-coding RNA.
 LNCRNA_MIN_LENGTH = 200
 # [BIOLOGY: per-species override candidate] Helixer CDS-channel probability
 # (channel 2, exon-length-weighted) at/below which an ORF-less locus is treated as
-# coding-channel-quiet — i.e. consistent with a genuine non-coding RNA rather than
+# coding-channel-quiet: i.e. consistent with a genuine non-coding RNA rather than
 # a fragmentary/failed coding gene. An ORF-less locus with CDS-channel confidence
 # *above* this (Helixer still "saw" coding signal but no ORF was admissible) is
 # left ncRNA_undetermined, not asserted to be a lncRNA. Consulted only when an HDF5
@@ -88,7 +88,7 @@ PLAN_DEFAULT_MIN_BOUNDARY_GAP = 1000
 # A fragmented draft assembly can have 10^5-10^6 tiny contigs; one chunk per
 # scaffold would blow past Slurm MaxArraySize. When packing is enabled, a
 # scaffold at or below this length is "small" and eligible to share a chunk with
-# other small scaffolds (a gene is never split — only whole, uncut scaffolds are
+# other small scaffolds (a gene is never split, only whole, uncut scaffolds are
 # packed). 1 Mb is a generous ceiling for a draft contig vs a real chromosome arm.
 PLAN_SMALL_SCAFFOLD_BP = 1_000_000
 # Cap on how many small scaffolds a single packed chunk may hold, so a combined

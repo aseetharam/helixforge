@@ -1,4 +1,4 @@
-"""Preflight tool check — ``helixforge doctor``."""
+"""Preflight tool check: ``helixforge doctor``."""
 
 from __future__ import annotations
 
@@ -29,24 +29,24 @@ class ToolSpec:
 
 # Ordered by stage so the rendered table reads reconcile → prep → benchmark.
 TOOL_MATRIX = (
-    # reconcile core — required (the pipeline cannot run without these).
+    # reconcile core: required (the pipeline cannot run without these).
     # Pins are the versions the TAIR10 milestone runs actually used
     # (docs/EXTERNAL_TOOLS.md).
     ToolSpec("mikado", "mikado", "reconcile", "2.3.4", True),
     ToolSpec("diamond", "diamond", "reconcile", "2.1.16", True),
     ToolSpec("transdecoder", "TransDecoder.LongOrfs", "reconcile", "5.5.0", True),
     ToolSpec("portcullis", "portcullis", "reconcile", None, False),
-    # prep — optional (only needed when staging evidence from raw reads)
+    # prep: optional (only needed when staging evidence from raw reads)
     ToolSpec("star", "STAR", "prep", "2.7.11b", False),
     ToolSpec("hisat2", "hisat2", "prep", "2.2.1", False),
     ToolSpec("samtools", "samtools", "prep", "1.21", False),
     ToolSpec("stringtie", "stringtie", "prep", "3.0.3", False),
     ToolSpec("miniprot", "miniprot", "prep", "0.18", False),
     ToolSpec("helixer", "Helixer.py", "prep", "0.3.5", False),
-    # ncRNA — optional (the opt-in structured-ncRNA hook; prep/ncrna.py)
+    # ncRNA: optional (the opt-in structured-ncRNA hook; prep/ncrna.py)
     ToolSpec("trnascan", "tRNAscan-SE", "ncrna", "2.0.12", False),
     ToolSpec("infernal", "cmscan", "ncrna", "1.1.5", False, version_arg="-h"),
-    # benchmark — optional (pins filled Phase 18; see docs/EXTERNAL_TOOLS.md)
+    # benchmark: optional (pins filled Phase 18; see docs/EXTERNAL_TOOLS.md)
     ToolSpec("mikado_compare", "mikado", "benchmark", "2.3.4", False),
     ToolSpec("gffcompare", "gffcompare", "benchmark", "0.12.6", False),
     ToolSpec("compleasm", "compleasm", "benchmark", "0.2.6", False),
@@ -117,7 +117,7 @@ class DoctorReport:
         """One warning per version-mismatch.
 
         A resolved tool whose version disagrees with the pinned matrix is a
-        silent scientific-correctness risk — most acutely Mikado, whose
+        silent scientific-correctness risk, most acutely Mikado, whose
         scoring/config schema has changed across minor versions. The mismatch
         is a loud warning (not a hard failure: ``ok()`` ignores it), so a
         deliberate version bump is not blocked, only surfaced.
@@ -127,7 +127,7 @@ class DoctorReport:
             if s.status != MISMATCH:
                 continue
             extra = (
-                " — Mikado's scoring/config schema changes across minors"
+                ", Mikado's scoring/config schema changes across minors"
                 "; re-verify the emitted config"
                 if s.key in ("mikado", "mikado_compare")
                 else ""
@@ -166,7 +166,7 @@ class DoctorReport:
         lines = [fmt(headers), fmt(tuple("-" * w for w in widths))]
         lines.extend(fmt(r) for r in rows)
         for w in self.drift_warnings():
-            lines.append(f"WARNING: version drift — {w}")
+            lines.append(f"WARNING: version drift, {w}")
         n_missing = sum(1 for s in self.statuses if s.status == MISSING)
         n_mismatch = sum(1 for s in self.statuses if s.status == MISMATCH)
         n_found = sum(1 for s in self.statuses if s.status == FOUND)
@@ -203,11 +203,11 @@ def _resolve_bins(config_or_bins: object) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 #
 # mikado/config.py emits configuration.yaml + scoring YAML with the column
-# order/schema *assumed* — and Mikado's scoring schema has changed across minor
+# order/schema *assumed*: and Mikado's scoring schema has changed across minor
 # versions. A silent drift produces a config Mikado accepts but
 # mis-interprets: a scientifically wrong run that still "passes". This check
 # detects the Mikado version and asserts the emitted files carry the top-level
-# sections that version expects (a heuristic — Mikado has no stable
+# sections that version expects (a heuristic, Mikado has no stable
 # ``configure --check`` subcommand), warning loudly on drift.
 
 # The pinned Mikado (single source: TOOL_MATRIX / docs/EXTERNAL_TOOLS.md).
@@ -268,7 +268,7 @@ def verify_emitted_config(
     file carries :data:`_SCORING_REQUIRED`. A missing section ⇒ not OK. The
     detected version is compared to the pinned ``2.3.x``; a mismatch or an
     undetectable version is a loud **warning** (the schema may have drifted) but
-    does not by itself fail the check. Never raises on a missing tool/file —
+    does not by itself fail the check. Never raises on a missing tool/file,
     those become warnings/missing-section findings.
     """
     if version is None:
@@ -278,7 +278,7 @@ def verify_emitted_config(
     if version is None:
         warnings.append(
             "could not detect Mikado version; assuming the pinned "
-            f"{_PINNED_MIKADO} schema — verify manually before a real run"
+            f"{_PINNED_MIKADO} schema, verify manually before a real run"
         )
     elif not _matches_pin(_PINNED_MIKADO, ".".join(map(str, version))):
         warnings.append(
@@ -373,16 +373,16 @@ class ShimStatus:
         if not self.applicable:
             return (
                 "shim check: n/a (run from a helixforge checkout to verify the "
-                f"`helixforge` console script — resolved to {self.imported})"
+                f"`helixforge` console script, resolved to {self.imported})"
             )
         if self.foreign:
             return (
-                "shim check: FOREIGN — `import helixforge` resolves to "
+                "shim check: FOREIGN, `import helixforge` resolves to "
                 f"{self.imported}, not this checkout's {self.expected}. The "
                 "`helixforge` console script points at a stale tree; "
                 "`pip install -e .` into this env or call ~/.local/bin/helixforge."
             )
-        return f"shim check: OK — helixforge imports from {self.imported}"
+        return f"shim check: OK, helixforge imports from {self.imported}"
 
 
 def check_shim(
@@ -447,7 +447,7 @@ class CramRefStatus:
             via = "--reference" if self.reference_set else "REF_CACHE/REF_PATH"
             return f"cram-reference: OK ({names} → decode via {via})"
         return (
-            f"cram-reference: MISSING — CRAM input(s) {names} but no --reference "
+            f"cram-reference: MISSING, CRAM input(s) {names} but no --reference "
             "and no REF_CACHE/REF_PATH; pysam would attempt a remote ENA fetch "
             "(fails offline). Pass --reference <genome.fa> or seed a REF_CACHE."
         )
@@ -493,7 +493,7 @@ class ScoringProfileStatus:
 
     def render(self) -> str:
         if not self.profiles:
-            return "scoring profiles: NONE FOUND — package data may not be installed"
+            return "scoring profiles: NONE FOUND, package data may not be installed"
         lines = ["scoring profiles:"]
         for name, available in sorted(self.profiles.items()):
             tag = "OK" if available else "MISSING"

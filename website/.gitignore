@@ -1,0 +1,15 @@
+# build output
+dist/
+.astro/
+
+# dependencies
+node_modules/
+
+# generated CLI reference — mirrored from ../docs/cli by scripts/sync-cli.mjs
+# at `npm run dev` / `npm run build`. Never edit or commit by hand.
+src/content/docs/cli/
+
+# misc
+.DS_Store
+*.log
+npm-debug.log*

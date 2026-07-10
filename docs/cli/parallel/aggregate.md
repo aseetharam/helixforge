@@ -9,7 +9,7 @@ verifying: it asserts globally-unique gene AND transcript ids and that every
 Helixer locus is covered exactly once, raising on any violation.
 
 Outputs (under the resolved prefix):
-- <prefix>.gff3 (+ .tier1/2/3.gff3) and <prefix>.report.tsv — the merged
+- <prefix>.gff3 (+ .tier1/2/3.gff3) and <prefix>.report.tsv, the merged
   annotation + per-gene report (same columns as ``reconcile``)
 - the master id_map.json (created if absent)
 - a printed summary: num_genes, num_loci, tier_counts, origin_counts

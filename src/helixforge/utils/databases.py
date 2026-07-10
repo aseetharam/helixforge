@@ -54,7 +54,7 @@ TAX_DIVISION_BASE = (
 PREDEFINED_DATABASES: dict[str, dict[str, str]] = {
     "swissprot": {
         "name": "Swiss-Prot (complete)",
-        "description": "Curated, high-quality annotations — all organisms",
+        "description": "Curated, high-quality annotations, all organisms",
         "url": SWISSPROT_URL,
         "filename": "uniprot_sprot.fasta.gz",
         "format": "fasta",
@@ -75,21 +75,21 @@ PREDEFINED_DATABASES: dict[str, dict[str, str]] = {
     },
     "uniref90": {
         "name": "UniRef90",
-        "description": "Clustered at 90% identity — medium size",
+        "description": "Clustered at 90% identity, medium size",
         "url": UNIREF_URL.format(level=90),
         "filename": "uniref90.fasta.gz",
         "format": "fasta",
     },
     "uniref50": {
         "name": "UniRef50",
-        "description": "Clustered at 50% identity — smaller",
+        "description": "Clustered at 50% identity, smaller",
         "url": UNIREF_URL.format(level=50),
         "filename": "uniref50.fasta.gz",
         "format": "fasta",
     },
     "trembl": {
         "name": "TrEMBL (complete)",
-        "description": "Automated annotations — all organisms (very large)",
+        "description": "Automated annotations, all organisms (very large)",
         "url": TREMBL_URL,
         "filename": "uniprot_trembl.fasta.gz",
         "format": "fasta",

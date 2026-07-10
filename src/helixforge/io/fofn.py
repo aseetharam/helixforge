@@ -18,7 +18,7 @@ def expand_file_args(
     ``values`` are the raw direct-flag values (a click ``multiple=True`` tuple);
     each is split on ``,`` so the repeatable and comma forms collapse in one
     pass. ``list_file`` is the optional ``-list`` FOFN. Every resolved path is
-    validated to exist — a missing path raises :class:`FileNotFoundError` naming
+    validated to exist, a missing path raises :class:`FileNotFoundError` naming
     ``label`` and, for FOFN entries, the list file + line number; nothing is
     silently dropped. The merge is order-preserving and de-duplicated by resolved
     absolute path (direct flags first, then FOFN entries).
@@ -100,8 +100,8 @@ def expand_stringtie_args(
     ``--stringtie`` used to be a single sample-list file; it is now repeatable
     individual GTFs with the list-file moved to ``--stringtie-list`` (D3). The
     one-release safety net: a lone ``--stringtie`` value that is *itself* a FOFN
-    — an existing non-GTF file whose first real line resolves to an existing GTF
-    — is treated as ``--stringtie-list`` with a deprecation warning. ``warn`` is
+an existing non-GTF file whose first real line resolves to an existing GTF
+is treated as ``--stringtie-list`` with a deprecation warning. ``warn`` is
     the message sink (defaults to :func:`warnings.warn` as a ``DeprecationWarning``).
     """
     values = list(values)
@@ -115,7 +115,7 @@ def expand_stringtie_args(
                 if os.path.isfile(resolved) and _looks_like_gtf(resolved):
                     message = (
                         f"--stringtie was given a list-file ({candidate}); passing a "
-                        f"sample-list to --stringtie is deprecated — use "
+                        f"sample-list to --stringtie is deprecated: use "
                         f"--stringtie-list instead."
                     )
                     if warn is not None:

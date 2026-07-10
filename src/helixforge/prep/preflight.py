@@ -152,7 +152,7 @@ def _collect_sources(
 
 
 # ---------------------------------------------------------------------------
-# D1 — concordance
+# D1: concordance
 # ---------------------------------------------------------------------------
 
 
@@ -192,7 +192,7 @@ def check_reference_concordance(
 
     The genome FASTA seqids are the reference substrate. For each evidence
     source: an **entirely disjoint** seqid set (no shared name with the genome)
-    is an **error** (a naming mismatch — the classic ``Chr1`` vs ``1`` silent
+    is an **error** (a naming mismatch, the classic ``Chr1`` vs ``1`` silent
     failure); a **partial** overlap (some source seqids absent from the genome)
     is a **warning** listing the missing names. Where two sources both carry a
     contig length (FASTA ``.fai``, BAM ``@SQ:LN``), a disagreement on a shared
@@ -214,7 +214,7 @@ def check_reference_concordance(
             shared = src.seqids & ref_seqids
             if ref_seqids and not shared:
                 report.errors.append(
-                    f"{src.label} shares NO seqid with the genome FASTA — likely "
+                    f"{src.label} shares NO seqid with the genome FASTA, likely "
                     f"a naming mismatch. {src.label}: [{_sample(src.seqids)}] vs "
                     f"genome: [{_sample(ref_seqids)}]"
                 )
@@ -245,7 +245,7 @@ def check_reference_concordance(
 
 
 # ---------------------------------------------------------------------------
-# D3 — CSI gate
+# D3: CSI gate
 # ---------------------------------------------------------------------------
 
 
@@ -254,7 +254,7 @@ def check_csi_requirement(config: object) -> list[str]:
 
     If any reference contig exceeds :data:`CSI_REQUIRED_THRESHOLD` (2^29 bp), a
     ``.csi`` index is mandatory for every BAM (``.bai`` cannot address those
-    coordinates and a fetch silently returns nothing — biological-assessment
+    coordinates and a fetch silently returns nothing, biological-assessment
     §3.4). Returns ``[]`` when no large contig is present or every BAM has CSI.
     """
     errors: list[str] = []
@@ -281,7 +281,7 @@ def check_csi_requirement(config: object) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# D3b — work-dir writability
+# D3b: work-dir writability
 # ---------------------------------------------------------------------------
 
 
@@ -321,7 +321,7 @@ def check_work_dir(config: object) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# D3c — tool-chain readiness for the configured pipeline
+# D3c: tool-chain readiness for the configured pipeline
 # ---------------------------------------------------------------------------
 
 
@@ -366,7 +366,7 @@ def check_tool_chain(config: object) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# D4 / orchestration — the single reusable gate
+# D4 / orchestration: the single reusable gate
 # ---------------------------------------------------------------------------
 
 
@@ -451,7 +451,7 @@ def run_preflight(
 ) -> PreflightReport:
     """The single input-integrity gate (format + concordance + CSI + work-dir + tools).
 
-    Reused verbatim by ``helixforge doctor`` and ``helixforge run`` — never
+    Reused verbatim by ``helixforge doctor`` and ``helixforge run``, never
     duplicated. Non-mutating: it only reads and reports, so a passing preflight
     leaves a run's gene/tier/origin/AS counts identical (count-neutral).
 
@@ -477,7 +477,7 @@ def require_preflight(
 ) -> PreflightReport:
     """Run :func:`run_preflight` and raise :class:`PreflightError` if not OK.
 
-    The required form for ``helixforge run`` — a malformed/inconsistent input
+    The required form for ``helixforge run``, a malformed/inconsistent input
     stops the run loudly instead of silently degrading the annotation.
     """
     report = run_preflight(config, alias_map=alias_map)

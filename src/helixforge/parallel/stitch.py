@@ -49,7 +49,7 @@ def _plan_boundaries(plan: Plan) -> dict[str, list[int]]:
 
     An interior boundary on a scaffold is a coordinate that is both the ``hi`` of
     one chunk region and the ``lo`` of the next (the shared cut point). Whole-
-    scaffold (bare-seqid) chunks contribute none — they were never cut.
+    scaffold (bare-seqid) chunks contribute none, they were never cut.
     """
     his: dict[str, set[int]] = {}
     los: dict[str, set[int]] = {}

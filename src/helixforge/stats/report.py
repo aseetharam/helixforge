@@ -63,7 +63,7 @@ def _quantile(values: list[float], q: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# D4 — evidence-support / mapping-rate summary
+# D4: evidence-support / mapping-rate summary
 # ---------------------------------------------------------------------------
 
 
@@ -77,17 +77,17 @@ def support_summary(
 ) -> dict[str, Any]:
     """The "how trustworthy is this annotation" summary.
 
-    - ``mapping_rate`` — overall RNA-seq mapping rate from ``bam_stats``
+    - ``mapping_rate``, overall RNA-seq mapping rate from ``bam_stats``
       (``{mapped, unmapped}`` or a precomputed ``mapping_rate``); ``None`` if no
       BAM stats are given.
-    - ``frac_genes_junction_supported`` — fraction of genes whose primary
+    - ``frac_genes_junction_supported``, fraction of genes whose primary
       transcript has ≥1 junction-supported intron. Uses the model's stored
       ``junction_support_fraction``; if that is ``None`` and a ``junctions`` list
       is supplied, it is computed against the read-count-filtered junction set.
       Single-exon genes (no introns) count as *not* junction-supported.
-    - ``frac_genes_tpm_pass`` — fraction of genes whose primary transcript has
+    - ``frac_genes_tpm_pass``, fraction of genes whose primary transcript has
       ``tpm >= tpm_threshold`` (genes with no TPM are not counted as passing).
-    - ``aed`` — distribution (n / mean / median / q1 / q3 / min / max) of the
+    - ``aed``, distribution (n / mean / median / q1 / q3 / min / max) of the
       per-gene representative AED (:func:`compute_aed`).
 
     All fractions are over the full gene set so they are directly hand-checkable.
@@ -178,7 +178,7 @@ def _gene_aed(
 
 
 # ---------------------------------------------------------------------------
-# D3 — genome-level report
+# D3: genome-level report
 # ---------------------------------------------------------------------------
 
 
@@ -202,7 +202,7 @@ def build_report(
     support) when present; with none of them the structural numbers fall back to
     structural proxies. ``completeness`` is a pre-computed
     ``{busco, compleasm, omark}`` dict (the bench tools are run by the caller, not
-    here — they are off the default path). ``run_stats`` is ``RunStats.as_dict()``.
+    here, they are off the default path). ``run_stats`` is ``RunStats.as_dict()``.
 
     The returned dict is JSON-serialisable and deterministic (sorted keys on
     serialisation). It also carries a ``multiqc`` block (custom-content schema) so
@@ -300,7 +300,7 @@ def _multiqc_block(report: dict[str, Any]) -> dict[str, Any]:
 
     MultiQC ingests a JSON whose ``data`` maps a sample id → ``{metric: value}``;
     ``plot_type='generalstats'`` surfaces these in the general-stats table. We
-    expose the scalar headline metrics (NaNs dropped — MultiQC dislikes them).
+    expose the scalar headline metrics (NaNs dropped, MultiQC dislikes them).
     """
     s = report["structure"]
     sup = report["support"]
@@ -331,7 +331,7 @@ def _is_nan(v: Any) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Serialisation — JSON (MultiQC-compatible) + self-contained HTML
+# Serialisation: JSON (MultiQC-compatible) + self-contained HTML
 # ---------------------------------------------------------------------------
 
 

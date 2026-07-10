@@ -14,7 +14,7 @@ def overlap_bases(a_intervals: Sequence[Any], b_intervals: Sequence[Any]) -> int
 
     Two-pointer sort-merge over the (disjoint) interval lists: O(Ea+Eb) after an
     O(E log E) defensive sort, replacing the old O(Ea×Eb) nested loop (Phase 20
-    §2.5). The integer result is identical for disjoint inputs (the real domain —
+    §2.5). The integer result is identical for disjoint inputs (the real domain,
     exon/CDS lists are sorted, non-overlapping by model invariant), which the
     locus-matching inner loop and isoform-redundancy filter both consume.
     """
@@ -68,8 +68,8 @@ def is_redundant(
 
     Requires high cDNA (exon) reciprocal overlap AND **identical intron chains**
     AND, when both carry CDS, CDS reciprocal overlap ``>= min_cds_overlap``. The
-    intron-chain check is what keeps genuine alternatives (ES/IR/A5/A3/MX) — which
-    can share a lot of cDNA — from being dropped. Defense in depth: Mikado pick
+    intron-chain check is what keeps genuine alternatives (ES/IR/A5/A3/MX), which
+    can share a lot of cDNA, from being dropped. Defense in depth: Mikado pick
     should already remove most redundancy.
 
     ``a_chain``/``b_chain`` accept a precomputed ``frozenset`` intron chain so a

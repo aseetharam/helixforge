@@ -1,0 +1,68 @@
+---
+title: 8. Preflight (doctor)
+description: Run helixforge doctor before the long reconcile to resolve every external tool and validate input integrity; it fails in seconds, not hours.
+sidebar:
+  order: 8
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`helixforge doctor` is the single input-validation entry point. Run it **before** the real
+[reconcile](/tutorial/reconcile/). It exits non-zero on the first missing tool or input
+mismatch, so a misconfigured environment fails in seconds instead of hours into the run.
+Nothing is modified; `doctor` only inspects.
+
+<Aside type="note">
+This step is placed last in the tutorial because it validates every input the previous
+steps produced, but in practice you run it **first**, right before submitting the
+reconcile jobs.
+</Aside>
+
+## Tools-only preflight
+
+With no inputs, `doctor` resolves and versions every external tool the pipeline shells out
+to (mikado, diamond, transdecoder, portcullis, miniprot, …) and checks environment hygiene:
+
+```bash
+apptainer exec helixforge.sif helixforge doctor
+```
+
+## Tools + input integrity
+
+Pass the maize inputs to also run the input-integrity gate, seqid concordance across
+inputs, GFF3/GTF/FASTA/BAM format sniffing, and BAM index presence. `doctor` takes
+individual files (`--bam`, `--star-sj`, and `--stringtie` are repeatable), so pass a
+representative sample or expand the list:
+
+```bash
+apptainer exec helixforge.sif helixforge doctor \
+  --genome genome/Zm-B73-REFERENCE-NAM-5.0.fa \
+  --helixer helixer_output/Zea-mays-subsp-mays-B73_helixer.gff3 \
+  --helixer-h5 helixer_output/Zea-mays-subsp-mays-B73_predictions.h5 \
+  --miniprot Zm-B73-sw-plants-miniprot.gff3 \
+  --bam bam/B73_8DAS_root_MN01011_Aligned.sortedByCoord.out.bam \
+  --star-sj bam/B73_8DAS_root_MN01011_SJ.out.tab \
+  --stringtie stringtie/B73_8DAS_root_MN01011.gtf
+```
+
+<Aside type="tip" title="Seqid concordance is the classic failure">
+The most common preflight failure is a **seqid mismatch**, the genome uses `chr1` but a
+BAM or GFF uses `1` (or vice versa). `doctor` catches this before reconcile does. If your
+inputs legitimately use different names, pass a mapping with `--seqid-aliases`.
+</Aside>
+
+## What it checks
+
+- **External-tool table**, tool, resolved path, detected version, status.
+- **Environment hygiene**, console-script shim, CRAM-reference readiness.
+- **Input integrity** (when `--genome` + `--helixer` given), seqid concordance, format
+  sniffing, BAM/CRAM index (CSI) presence.
+- **Config verification** (optional), `--check-config` / `--check-scoring` validate an
+  emitted Mikado config/scoring file against the detected Mikado version.
+
+See the [`doctor` CLI reference](/cli/doctor/) for every option.
+
+---
+
+That completes the maize B73 walkthrough. From here, browse the full
+[CLI reference](/cli/) or the [benchmarks](/benchmarks/) this pipeline produced.

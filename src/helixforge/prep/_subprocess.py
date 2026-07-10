@@ -22,7 +22,7 @@ class ToolError(RuntimeError):
 
     Subclasses ``RuntimeError`` so existing ``pytest.raises(RuntimeError)`` and
     callers keep working unchanged. The structured ``returncode`` is what the
-    bounded-retry wrapper gates on — only an **allowlisted** exit code from an
+    bounded-retry wrapper gates on, only an **allowlisted** exit code from an
     **idempotent** step is retried.
     """
 
@@ -50,13 +50,13 @@ def with_retries(
     """Run ``call`` with bounded retry-with-backoff on a :class:`ToolError`.
 
     Wraps **only idempotent** external steps
-    (DIAMOND, alignment, StringTie — they fully regenerate their output) so a
+    (DIAMOND, alignment, StringTie, they fully regenerate their output) so a
     transient cluster failure (FS hiccup, scratch contention, momentary OOM) does
     not kill a multi-hour run. A retry happens only while attempts remain **and**
     the exit code is allowlisted (``retry_exit_codes=None`` ⇒ any nonzero;
     a tuple ⇒ exactly those). A missing binary (``FileNotFoundError``) is **not**
     a ``ToolError`` and so is never retried. Backoff is linear (``backoff * n``).
-    **Never** wrap a non-idempotent step (e.g. Mikado ``serialise``) — checkpoint
+    **Never** wrap a non-idempotent step (e.g. Mikado ``serialise``), checkpoint
     it instead.
     """
     _log_use = log or _log
@@ -72,7 +72,7 @@ def with_retries(
                 delay = backoff * attempt
                 argv0 = exc.argv[0] if exc.argv else "?"
                 _log_use.warning(
-                    "transient failure (%s exit %s) — retry %d/%d in %.1fs",
+                    "transient failure (%s exit %s), retry %d/%d in %.1fs",
                     argv0,
                     exc.returncode,
                     attempt,
@@ -111,7 +111,7 @@ def _write_stderr_log(stderr_log: str | Path | None, stderr: str | None) -> None
     """Stream a tool's *full* stderr to ``stderr_log``.
 
     The exception message keeps only the tail (``_STDERR_TAIL``); the head of a
-    long error — often the real cause — is preserved here. Best-effort: a failure
+    long error, often the real cause, is preserved here. Best-effort: a failure
     to write the diagnostic log never masks the underlying tool error.
     """
     if not stderr_log or not stderr:
@@ -204,7 +204,7 @@ def run_tool(
     ``retries``: when > 0 and the step is **idempotent**, an
     allowlisted nonzero exit is retried with linear backoff (see
     :func:`with_retries`). Default ``retries=0`` reproduces the original
-    single-attempt behavior byte-for-byte — never retry a non-idempotent step.
+    single-attempt behavior byte-for-byte, never retry a non-idempotent step.
     """
     _log_use = log or _log
     argv_strs: list[str] = [str(a) for a in argv]
@@ -302,7 +302,7 @@ def tool_version(bin_name: str | Path, version_arg: str = "--version") -> str | 
     """Return a best-effort version string for ``bin_name`` (None if unresolved).
 
     Runs ``bin_name <version_arg>`` and returns the first non-empty output line
-    (some tools print to stdout, some to stderr — both are inspected). Never
+    (some tools print to stdout, some to stderr, both are inspected). Never
     raises: a missing binary or nonzero exit yields ``None``. Used by
     ``helixforge doctor`` (Phase 13).
     """

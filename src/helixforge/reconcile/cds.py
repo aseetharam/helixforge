@@ -32,7 +32,7 @@ MIKADO_ORIGINS = ("mikado_1to1", "split", "merge", "novel")
 
 # _CROSS_CHECK_OVERLAP re-exported from helixforge.constants (Phase 19, §1.6):
 # below this reciprocal CDS overlap, an independent miniprot ORF is considered to
-# materially disagree with the chosen Mikado ORF (cross-check only — never edits).
+# materially disagree with the chosen Mikado ORF (cross-check only, never edits).
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ def project_cds_to_exons(
     Each input CDS segment is intersected with every exon (pairwise overlap);
     portions falling in introns are dropped. Surviving pieces are merged where
     adjacent, sorted, and phased in coding order. Returns ``None`` if nothing
-    survives or the total length is not a multiple of 3 — **no trimming** is done
+    survives or the total length is not a multiple of 3, **no trimming** is done
     to force frame.
 
     ``strand`` (default ``'+'``) selects the coding order for phase computation;
@@ -196,7 +196,7 @@ def _include_genomic_stop(
     position (the 3 nt immediately 3' of the CDS in the genome) and, if it is
     a valid stop codon AND the extension fits within an exon, returns the
     extended + re-phased CDS. Returns ``None`` when no valid stop is present or
-    the extension overflows the exon — the caller keeps the original CDS and
+    the extension overflows the exon, the caller keeps the original CDS and
     ``validate`` flags it.
     """
     if not cds_segments:
@@ -238,12 +238,12 @@ def _rescue_backstop_cds(
     """Return ``gene`` with its backstop transcript given ``cds_segments``,
     re-tiered and flagged ``BACKSTOP_RESCUED``.
 
-    Uses ``attrs.evolve`` so model validation re-runs — a CDS
+    Uses ``attrs.evolve`` so model validation re-runs, a CDS
     that violates any invariant raises and is treated by the caller as a failed
     projection. The tier is recomputed from the rescued primary via
     :func:`assign_tier`: a now-CDS-bearing backstop tiers like a Mikado-origin
-    gene — Tier 1 if the CDS is homology-backed (a real miniprot ``protein_id``),
-    Tier 2 if it is CDS-only (e.g. a TransDecoder ORF with no homology) — instead
+    gene, Tier 1 if the CDS is homology-backed (a real miniprot ``protein_id``),
+    Tier 2 if it is CDS-only (e.g. a TransDecoder ORF with no homology), instead
     of staying at the silent-backstop Tier 3/4.
     """
     t = gene.transcripts[0]
@@ -295,7 +295,7 @@ def _parse_transdecoder_bed(bed_path: str | Path) -> tuple[int, int] | None:
     TransDecoder BED12 reports the ORF on the sequence we supplied; since that
     sequence is already in coding orientation we keep only ``+``-strand ORFs
     (``-`` would be antisense to the gene). ``thickStart`` is 0-based,
-    ``thickEnd`` half-open — i.e. already transcript-space coordinates.
+    ``thickEnd`` half-open, i.e. already transcript-space coordinates.
     """
     if not os.path.exists(bed_path):
         return None
@@ -346,7 +346,7 @@ def batch_backstop_transdecoder(
     """Rescue all CDS-less backstop genes with **one** TransDecoder invocation.
 
     Replaces the per-gene ``cds._transdecoder_cds`` subprocess (one spawn per
-    CDS-less backstop gene — hundreds on a real genome) with a
+    CDS-less backstop gene, hundreds on a real genome) with a
     single multi-FASTA ``TransDecoder.LongOrfs``/``Predict`` over every CDS-less
     backstop transcript, parsing the resulting ORFs back per gene. Genes already
     carrying a CDS (e.g. miniprot-rescued) and Mikado-origin genes are untouched.
@@ -429,7 +429,7 @@ def _confirm_backstop_homology(
     transcript and reciprocally overlaps the intrinsic CDS above
     :data:`_CROSS_CHECK_OVERLAP`, the gene is marked homology-backed (the hit
     accession is recorded as ``protein_id``) and re-tiered via
-    :func:`assign_tier` — typically Tier 1. Genes already carrying homology, and
+    :func:`assign_tier`, typically Tier 1. Genes already carrying homology, and
     genes with no agreeing hit, are returned unchanged.
     """
     if transcript.has_homology or transcript.cds is None:
@@ -469,13 +469,13 @@ def assign_backstop_cds(
 
     ``stats`` (optional :class:`~helixforge.reconcile.runstats.RunStats`) records
     the rescue source (miniprot / TransDecoder / none) for each backstop gene;
-    observation only — it never changes which source wins.
+    observation only, it never changes which source wins.
     """
     if gene.origin != "helixer_backstop":
         return gene
     transcript = gene.transcripts[0]
 
-    # The model may already carry its intrinsic (Helixer) CDS — that ORF makes the
+    # The model may already carry its intrinsic (Helixer) CDS, that ORF makes the
     # gene coding on its own. miniprot then only *confirms homology* (re-tier to 1
     # + record the hit accession); it never replaces the model's ORF coordinates.
     if transcript.cds is not None:
@@ -547,7 +547,7 @@ def cds_cross_check(
     Returns ``CDS_DISAGREE`` if an overlapping same-strand miniprot ORF, once
     projected onto the gene's exons, has reciprocal CDS overlap below
     :data:`_CROSS_CHECK_OVERLAP` with the chosen primary ORF. **Never changes the
-    CDS** — this is a flag only. Returns ``None`` when the gene is
+    CDS**, this is a flag only. Returns ``None`` when the gene is
     not a Mikado-origin coding gene or there is nothing to compare against.
     """
     if gene.origin not in MIKADO_ORIGINS:

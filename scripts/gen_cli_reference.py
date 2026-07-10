@@ -7,7 +7,7 @@ command tree (``helixforge.cli:main``) so the reference is produced *from the
 parser itself* and cannot drift from the code. ``click`` is the only import
 (already a ``[cli]`` extra dependency).
 
-The reference is rendered entirely from each command's own definition — its
+The reference is rendered entirely from each command's own definition, its
 **docstring** (`cmd.help`: description + the real output columns) and its
 **epilog** (`cmd.epilog`: worked examples). The docstring/epilog are therefore
 the *single source of truth*: ``--help`` and these Markdown pages render from the
@@ -28,7 +28,7 @@ Usage::
 
 In ``--check`` mode the script regenerates the tree to memory and compares it to
 the committed ``docs/cli/`` tree (content **and** the set of files), exiting
-non-zero with a hint on any difference — so adding a flag, renaming an option, or
+non-zero with a hint on any difference, so adding a flag, renaming an option, or
 editing a docstring without regenerating the docs fails the gate.
 """
 
@@ -140,7 +140,7 @@ def _examples_block(cmd: click.Command) -> list[str]:
         return []
     lines = epilog.replace(_BACKSPACE, "").splitlines()
     lines = _squeeze_blanks([line.rstrip() for line in lines])
-    # Drop a leading "Examples:" / "Example:" header — the section heading
+    # Drop a leading "Examples:" / "Example:" header, the section heading
     # below already names the block.
     if lines and lines[0].strip().rstrip(":").lower() in ("example", "examples"):
         lines = _squeeze_blanks(lines[1:])
@@ -189,10 +189,10 @@ def _rel_path(parts: list[str]) -> str:
 
 def _index_page(root: click.Group, leaves: list[tuple[list[str], click.Command]]) -> str:
     lines = [
-        "# HelixForge — Command-line reference",
+        "# HelixForge Command-line reference",
         "",
         "> Auto-generated from the `helixforge` click app by "
-        "`scripts/gen_cli_reference.py`. Do not edit by hand — run the script "
+        "`scripts/gen_cli_reference.py`. Do not edit by hand, run the script "
         "(or let the pre-commit/CI drift gate regenerate it). Each command's "
         "description, options, and examples come straight from its docstring and "
         "epilog, so this reference cannot drift from the code.",

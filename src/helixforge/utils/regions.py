@@ -6,7 +6,7 @@ from __future__ import annotations
 def parse_region(region: str) -> tuple[str, int | None, int | None]:
     """Parse a region string ``"seqid:start-end"`` → ``(seqid, start, end)``.
 
-    Coordinates are returned verbatim as integers (no semantic conversion —
+    Coordinates are returned verbatim as integers (no semantic conversion,
     that is the job of ``gff3_to_internal`` / ``internal_to_gff3``). A bare
     ``"seqid"`` returns ``(seqid, None, None)``. Requires ``start <= end`` when
     both are present.

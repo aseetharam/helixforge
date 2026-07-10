@@ -168,13 +168,13 @@ def _strip_terminal_stop_codon(
 
     Mikado's loci GFF3 stores CDS **including** the stop codon, but the internal
     convention is CDS-excludes-stop. When Mikado's ``has_stop_codon`` metric is
-    true this removes the last ``n`` coding nucleotides — walking across CDS
-    segments when the stop spans an intron — and returns a new genomic-ascending
+    true this removes the last ``n`` coding nucleotides, walking across CDS
+    segments when the stop spans an intron, and returns a new genomic-ascending
     ``CDSSegment`` list, or ``None`` if the CDS is too short to trim (the caller
     then keeps the original).
 
-    Only the 3' (downstream) coding end is shortened, so every upstream phase —
-    including the 5'-most segment's frame-fixing phase — is preserved. ``+`` codes
+    Only the 3' (downstream) coding end is shortened, so every upstream phase,
+    including the 5'-most segment's frame-fixing phase, is preserved. ``+`` codes
     ascending (trim the high-coordinate end); ``-`` codes descending (trim the
     low-coordinate end). This is a deterministic convention normalisation, **not**
     heuristic frame trimming: mod-3 is unaffected (n=3).
@@ -245,7 +245,7 @@ def _build_candidate(
 
     # CDS is stop-inclusive (§4.5): the stop codon is the last 3 bases of the
     # CDS. Mikado's loci GFF3 already stores CDS including the stop codon, so
-    # no trimming is needed — the CDS is kept as-is.
+    # no trimming is needed: the CDS is kept as-is.
 
     # 5'/3' partiality are independent: a 5'-partial-but-3'-complete
     # transcript must still have its stop codon verified, and vice versa. Mikado's
@@ -266,7 +266,7 @@ def _build_candidate(
 
     # Safety: if metrics say complete but the CDS is empirically non-mod-3, the
     # metrics are stale (computed on the prepared transcript, not the picked
-    # locus). Override to partial — empirical CDS is the ground truth.
+    # locus). Override to partial, empirical CDS is the ground truth.
     if cds is not None and not cds_partial_5prime and not cds_partial_3prime:
         total_cds = sum(seg.end - seg.start for seg in cds)
         if total_cds % 3 != 0:
@@ -280,7 +280,7 @@ def _build_candidate(
             cds_partial_3prime = True
 
     # Protein-homology support: Mikado's loci GFF3 has no hit accession, but the
-    # metrics TSV carries the best-hit BLAST/DIAMOND score — the Tier-1 homology
+    # metrics TSV carries the best-hit BLAST/DIAMOND score, the Tier-1 homology
     # signal (assign_tier / TranscriptCandidate.has_homology).
     blast_score_raw = metric_row.get("blast_score")
     blast_score: float | None = (

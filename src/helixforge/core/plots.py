@@ -115,7 +115,7 @@ def _plot_confidence_distribution_plotly(
         col=1,
     )
 
-    # Shade the 5th–95th percentile band — where the bulk of the data lives.
+    # Shade the 5th–95th percentile band: where the bulk of the data lives.
     fig.add_vrect(
         x0=p5,
         x1=p95,
@@ -217,7 +217,7 @@ def _plot_confidence_distribution_plotly(
             *fig.layout.annotations,
             dict(
                 text=(
-                    "Scores are genome-relative — a lower mean (e.g. ~0.64 in maize) "
+                    "Scores are genome-relative: a lower mean (e.g. ~0.64 in maize) "
                     "is a baseline for that genome, not a defect. "
                     "Pick a cutoff from this distribution, not the fixed 0.85/0.70 lines."
                 ),
@@ -273,7 +273,7 @@ def _plot_confidence_distribution_matplotlib(
     ax_hist.hist(overall, bins=30, color="#3498db", alpha=0.7, edgecolor="black")
     # Shade where the bulk of the data lives (5th–95th percentile band).
     ax_hist.axvspan(p5, p95, color="#3498db", alpha=0.12, label="5–95% band")
-    # Mean (solid) and median (dashed) — the markers the eye should find.
+    # Mean (solid) and median (dashed), the markers the eye should find.
     ax_hist.axvline(
         mean_score, color="#c0392b", linewidth=2, label=f"mean {mean_score:.2f}"
     )
@@ -320,7 +320,7 @@ def _plot_confidence_distribution_matplotlib(
     fig.text(
         0.5,
         0.005,
-        "Scores are genome-relative — a lower mean (e.g. ~0.64 in maize) is a "
+        "Scores are genome-relative: a lower mean (e.g. ~0.64 in maize) is a "
         "baseline for that genome, not a defect. Pick a cutoff from this "
         "distribution, not the fixed 0.85/0.70 lines.",
         ha="center",

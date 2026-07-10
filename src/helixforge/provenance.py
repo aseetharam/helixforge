@@ -37,7 +37,7 @@ def file_md5(path: str | os.PathLike[str], *, chunk_size: int = 1 << 20) -> str 
     """Streaming MD5 hex digest of ``path`` (``None`` if the file is absent).
 
     Reads in ``chunk_size`` blocks so a multi-Gb genome FASTA never loads into
-    memory. Returns ``None`` for a missing/unreadable file rather than raising —
+    memory. Returns ``None`` for a missing/unreadable file rather than raising,
     provenance is best-effort and must never sink a finished run.
     """
     if not path or not os.path.exists(path):
@@ -121,7 +121,7 @@ def build_provenance(
 
     ``params`` is the resolved configuration (hashed); ``tool_bins`` maps a tool
     label to its configured binary (probed for a real version); ``input_files``
-    maps an input label to a path (MD5-summed). All probes are best-effort —
+    maps an input label to a path (MD5-summed). All probes are best-effort,
     every value degrades to ``None``/``unresolved`` rather than raising, so a
     provenance build never fails a finished run.
     """

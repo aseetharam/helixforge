@@ -20,7 +20,7 @@ def test_write_benchmark_md_renders_all_sections(tmp_path):
     out = tmp_path / "BENCHMARK.md"
     write_benchmark_md(out, before_after=before_after, benchmark=benchmark, ablation=ablation)
     text = out.read_text()
-    assert "# HelixForge v3 — Araport11 benchmark" in text
+    assert "# HelixForge v3, Araport11 benchmark" in text
     assert "Before / after" in text and "Genes" in text
     assert "External benchmarks" in text and "number_of_gene" in text
     assert "Ablations" in text and "no_helixer_support" in text

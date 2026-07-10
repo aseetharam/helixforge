@@ -1,0 +1,34 @@
+/* ---------------------------------------------------------------------------
+   Table readability
+   ---------------------------------------------------------------------------
+   The docs lean heavily on tables whose cells contain inline code — CLI flags
+   (`--stringtie-list`), file paths, filenames. In narrow columns the browser
+   breaks that code at every hyphen/slash, so `--stringtie-list` splits across
+   three lines and the tables read as a wall of fragments.
+
+   Two rules fix it:
+   1. Inline code inside a table never breaks mid-token — a flag or filename
+      stays on one line.
+   2. If keeping code intact makes a table wider than the content column, the
+      whole table scrolls horizontally instead of wrapping every cell. Prose
+      cells (e.g. a "Role"/"Description" column) still wrap normally, because
+      the table still targets 100% width and only overflows when it must.
+--------------------------------------------------------------------------- */
+
+.sl-markdown-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  /* keep column borders/spacing tidy while in block/scroll mode */
+  border-collapse: collapse;
+}
+
+/* Don't break flags, paths, or filenames across lines. */
+.sl-markdown-content table :is(code, a) {
+  white-space: nowrap;
+}
+
+/* A little breathing room so nowrap code cells aren't cramped. */
+.sl-markdown-content table :is(th, td) {
+  padding-inline: 0.75rem;
+}

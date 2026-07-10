@@ -1,11 +1,11 @@
 """Optional EDTA transposable-element gating.
 
-EDTA is the *only* signal that calls a feature a transposon — no TE is ever
+EDTA is the *only* signal that calls a feature a transposon, no TE is ever
 inferred from any other source. With ``--te-annotation`` the pipeline computes
 each model's overlap with EDTA TE features and:
 
 * always emits :data:`~helixforge.qc.flags.TE_OVERLAP` when any overlap occurs
-  (flag-only inspection — see what *would* be reclassified), and, separately,
+  (flag-only inspection, see what *would* be reclassified), and, separately,
 * **gates** the coding call: a good-ORF gene whose model-fraction TE overlap is
   at or above the threshold is reclassified ``transposable_element`` (TE-encoded
   transposase / gag-pol ORFs are real ORFs, but they are not host genes).
@@ -36,7 +36,7 @@ _log = get_logger(__name__)
 # Top-level EDTA ``Classification`` order tokens (the part before ``/``,
 # lowercased) that are genuine transposable elements. Satellites (knob),
 # centromeric/subtelomeric/rDNA repeats, simple/low-complexity repeats are
-# deliberately excluded — they are repeats, not transposons.
+# deliberately excluded: they are repeats, not transposons.
 DEFAULT_TE_CLASSES: frozenset[str] = frozenset(
     {"ltr", "dna", "mite", "tir", "helitron", "line", "sine"}
 )
@@ -168,8 +168,8 @@ def gate_te(
 
     Returns ``(genes, n_flagged, n_reclassified)``:
 
-    * ``n_flagged`` — genes that got :data:`TE_OVERLAP` (any TE overlap > 0).
-    * ``n_reclassified`` — good-ORF (``protein_coding``) genes whose overlap was
+    * ``n_flagged``, genes that got :data:`TE_OVERLAP` (any TE overlap > 0).
+    * ``n_reclassified``, good-ORF (``protein_coding``) genes whose overlap was
       at/above ``threshold`` and were reclassified ``transposable_element`` and
       demoted to Tier 4.
 

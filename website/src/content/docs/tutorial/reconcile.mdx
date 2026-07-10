@@ -1,0 +1,145 @@
+---
+title: 6. Reconcile
+description: The core HelixForge run, reconcile the Helixer models against RNA-seq and protein evidence. The per-chromosome script the run used, plus the native whole-genome scatter path.
+sidebar:
+  order: 6
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Everything so far has produced the inputs. `helixforge reconcile` now runs
+**PREP → MIKADO → RECONCILE → OUTPUT**: it prepares Mikado inputs, reconciles Mikado loci
+against the Helixer gene set (rescuing silent genes, stabilising IDs, calling isoforms),
+applies the structural codon gate, and writes the tiered annotation.
+
+<Aside type="tip" title="Run doctor first">
+Before this long run, validate the environment and inputs with
+[`helixforge doctor`](/tutorial/preflight/). It fails in seconds on a missing tool or a
+seqid mismatch, instead of hours in.
+</Aside>
+
+## The run script (per chromosome)
+
+This is the exact script the maize run used, submitted **once per chromosome** with
+`sbatch reconcile.sh <chr>`:
+
+```bash
+#!/bin/bash
+chr=$1
+prefix=testing-4_"${chr}"
+time apptainer exec helixforge.sif helixforge reconcile \
+  --genome genome/Zm-B73-REFERENCE-NAM-5.0.fa \
+  --helixer helixer_output/Zea-mays-subsp-mays-B73_helixer.gff3 \
+  --helixer-h5 helixer_output/Zea-mays-subsp-mays-B73_predictions.h5 \
+  --stringtie-list stringtie.fofn \
+  --bam-list bam.fofn \
+  --star-sj-list sj.fofn \
+  --miniprot Zm-B73-sw-plants-miniprot.gff3 \
+  --protein-db swissprot_plants/uniprot_sprot_plants.fasta \
+  --no-functional-annotation \
+  --scoring-profile permissive \
+  --region "${chr}" \
+  --trace-primary \
+  --threads $SLURM_CPUS_ON_NODE \
+  --output-prefix "${prefix}"
+```
+
+Submit it for each of the ten maize chromosomes:
+
+```bash
+for chr in chr1 chr2 chr3 chr4 chr5 chr6 chr7 chr8 chr9 chr10; do
+  sbatch reconcile.sh "${chr}"
+done
+```
+
+## Every flag, explained
+
+Each links to its entry in the [`reconcile` CLI reference](/cli/reconcile/).
+
+### Inputs (from the previous steps)
+
+| Flag | Value | Role |
+|---|---|---|
+| [`--genome`](/cli/reconcile/) | `genome/Zm-B73-REFERENCE-NAM-5.0.fa` | Reference FASTA (required). |
+| [`--helixer`](/cli/reconcile/) | `helixer_output/…_helixer.gff3` | Helixer GFF3, the backbone gene set (required). |
+| [`--helixer-h5`](/cli/reconcile/) | `helixer_output/…_predictions.h5` | Per-base confidence; `_input.h5` sibling auto-detected. |
+| [`--stringtie-list`](/cli/reconcile/) | `stringtie.fofn` | 21 StringTie GTFs, transcript evidence. |
+| [`--bam-list`](/cli/reconcile/) | `bam.fofn` | 21 STAR BAMs, read coverage. |
+| [`--star-sj-list`](/cli/reconcile/) | `sj.fofn` | 21 `SJ.out.tab`, splice junctions. |
+| [`--miniprot`](/cli/reconcile/) | `Zm-B73-sw-plants-miniprot.gff3` | Backstop CDS projection only (does **not** enable Mikado). |
+| [`--protein-db`](/cli/reconcile/) | `swissprot_plants/uniprot_sprot_plants.fasta` | DIAMOND homology, with StringTie, **enables Mikado + isoform discovery**. |
+
+### Behaviour flags
+
+| Flag | Effect |
+|---|---|
+| [`--no-functional-annotation`](/cli/reconcile/) | Skip the opt-in InterProScan/eggNOG hook (off by default; stated explicitly here). |
+| [`--scoring-profile permissive`](/cli/reconcile/) | Use the permissive Mikado scoring template instead of `strict`. |
+| [`--region "${chr}"`](/cli/reconcile/) | Restrict the pass to one seqid; this is what makes the job per-chromosome. |
+| [`--trace-primary`](/cli/reconcile/) | Elect the canonical/primary isoform per gene by **TRaCE** ranked-choice voting instead of top `combined_score`. |
+| [`--threads`](/cli/reconcile/) | `$SLURM_CPUS_ON_NODE`, worker threads from the allocation. |
+| [`--output-prefix`](/cli/reconcile/) | Output stem, here `testing-4_<chr>`. |
+
+<Aside type="caution" title="Merging manual per-region runs">
+The script above restricts by `--region` but keeps default ID ranges. When you merge
+independent per-chromosome outputs yourself, reserve **disjoint** HFG ID ranges per chunk
+with [`--id-base`](/cli/reconcile/) / [`--novel-base`](/cli/reconcile/) so gene IDs do not
+collide. The native scatter path below does this reservation (and cross-chunk stitching)
+for you.
+</Aside>
+
+## Native whole-genome path (`--scatter`)
+
+Rather than hand-managing per-chromosome jobs, `reconcile` can chunk the genome into
+**gene-safe** pieces, run them, and aggregate into one verified annotation with a run
+manifest. Chunking changes memory/speed, **not the result**. Discovered from
+`reconcile --help`: `--scatter off|auto|<N>` and `--hpc local|slurm|hypershell`.
+
+<Tabs>
+  <TabItem label="Slurm array">
+Emit a Slurm array (submit it, then aggregate):
+
+```bash
+apptainer exec helixforge.sif helixforge reconcile \
+  --genome genome/Zm-B73-REFERENCE-NAM-5.0.fa \
+  --helixer helixer_output/Zea-mays-subsp-mays-B73_helixer.gff3 \
+  --helixer-h5 helixer_output/Zea-mays-subsp-mays-B73_predictions.h5 \
+  --stringtie-list stringtie.fofn \
+  --bam-list bam.fofn \
+  --star-sj-list sj.fofn \
+  --miniprot Zm-B73-sw-plants-miniprot.gff3 \
+  --protein-db swissprot_plants/uniprot_sprot_plants.fasta \
+  --no-functional-annotation \
+  --scoring-profile permissive \
+  --trace-primary \
+  --scatter 64 --hpc slurm \
+  --output-prefix Zm-B73-helixforge
+```
+  </TabItem>
+  <TabItem label="HyperShell">
+Run all chunks now via HyperShell (`pip install "helixforge[hpc]"`):
+
+```bash
+apptainer exec helixforge.sif helixforge reconcile \
+  --genome genome/Zm-B73-REFERENCE-NAM-5.0.fa \
+  --helixer helixer_output/Zea-mays-subsp-mays-B73_helixer.gff3 \
+  --helixer-h5 helixer_output/Zea-mays-subsp-mays-B73_predictions.h5 \
+  --stringtie-list stringtie.fofn \
+  --bam-list bam.fofn \
+  --star-sj-list sj.fofn \
+  --miniprot Zm-B73-sw-plants-miniprot.gff3 \
+  --protein-db swissprot_plants/uniprot_sprot_plants.fasta \
+  --no-functional-annotation \
+  --scoring-profile permissive \
+  --trace-primary \
+  --scatter 64 --hpc hypershell --workers 16 \
+  --output-prefix Zm-B73-helixforge
+```
+  </TabItem>
+</Tabs>
+
+Note there is **no `--region`** in the scatter runs: `--scatter` partitions the *whole*
+genome itself. For a fully scheduler-driven scatter-gather you can also drive the
+[`parallel plan` → `tasks` → `aggregate`](/cli/parallel/plan/) primitives directly.
+
+Next: [read the outputs →](/tutorial/outputs/)

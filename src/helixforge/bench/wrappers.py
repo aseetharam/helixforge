@@ -40,7 +40,7 @@ def _run_tool(
     """Run ``argv`` (list) with logging + timing; raise :class:`BenchmarkError`.
 
     A missing binary (``FileNotFoundError``) and a non-zero exit both surface as
-    a ``BenchmarkError`` with an actionable message — ``benchmark_all`` catches
+    a ``BenchmarkError`` with an actionable message, ``benchmark_all`` catches
     these so one absent tool never sinks the whole table.
     """
     argv = [str(a) for a in argv]
@@ -84,7 +84,7 @@ def _glob_one(root: Path | str, pattern: str, what: str) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Parsers — tolerant, line-oriented; take a path, read synthetic stats
+# Parsers: tolerant, line-oriented; take a path, read synthetic stats
 # ---------------------------------------------------------------------------
 
 # "<label> level...: Sn  Pr  F1"  (mikado compare .stats)
@@ -209,7 +209,7 @@ def parse_agat_stats(path: Path | str) -> dict[str, float]:
 
 
 # ---------------------------------------------------------------------------
-# Run wrappers — build argv, invoke, parse the output file
+# Run wrappers: build argv, invoke, parse the output file
 # ---------------------------------------------------------------------------
 
 
@@ -343,7 +343,7 @@ def run_agat_stats(
 
 
 # ---------------------------------------------------------------------------
-# benchmark_all — run the applicable tools → one comparable table
+# benchmark_all: run the applicable tools → one comparable table
 # ---------------------------------------------------------------------------
 
 
@@ -369,7 +369,7 @@ def benchmark_all(
 ) -> pd.DataFrame:
     """Run the applicable benchmarking tools → one tidy ``pandas.DataFrame``.
 
-    Columns: ``tool, metric, value`` (long form — easy to pivot for the ablation
+    Columns: ``tool, metric, value`` (long form, easy to pivot for the ablation
     figure or merge across runs). Which tools run depends on the inputs:
 
     - ``agat`` always (structural sanity on ``reconciled_gff3``);
@@ -380,8 +380,8 @@ def benchmark_all(
     ``tools`` optionally restricts to a subset of tool names. ``bins`` overrides
     individual binary paths (e.g. ``{"mikado": "/opt/mikado"}``). Every row carries
     a ``status`` column: ``ok`` for a metric a tool produced,
-    and a single synthetic ``status``-metric row per attempted tool that failed —
-    ``tool-absent`` when the binary was not found, ``failed`` on a non-zero exit —
+    and a single synthetic ``status``-metric row per attempted tool that failed,
+    ``tool-absent`` when the binary was not found, ``failed`` on a non-zero exit,
     so the caller can tell "tool absent" from "metric genuinely zero" instead of
     seeing the tool silently vanish. This fills the BUSCO/compleasm/OMArk
     completeness stubs left in ``stats/before_after`` (Phase 9).

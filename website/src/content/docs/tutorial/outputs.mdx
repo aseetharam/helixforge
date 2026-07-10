@@ -1,0 +1,102 @@
+---
+title: 7. Outputs
+description: What reconcile writes, the tiered GFF3s, the per-gene report, and the JSON/HTML summaries, and how to read the evidence tiers and biotypes.
+sidebar:
+  order: 7
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+With `--output-prefix testing-4_<chr>`, each `reconcile` pass writes a set of files sharing
+that stem. (For a `--scatter` run, the merged outputs use `--out-prefix`, defaulting to
+`--output-prefix`, plus a manifest.)
+
+## Files
+
+| File | Contents |
+|---|---|
+| `<prefix>.gff3` | Full reconciled annotation, all genes, all tiers, isoform-aware (1-based GFF3). |
+| `<prefix>.tier1.gff3` | Tier 1 only. |
+| `<prefix>.tier2.gff3` | Cumulative: Tier 1 + Tier 2. |
+| `<prefix>.tier3.gff3` | Cumulative: Tier 1 + Tier 2 + Tier 3. |
+| `<prefix>.report.tsv` | Per-gene report, one row per gene (columns below). |
+| `<prefix>.id_map.json` | Helixer-locus → HFG ID map (keeps IDs stable across reruns). |
+| `<prefix>.report.json` / `.report.html` / `.run_stats.json` | Machine- and human-readable run summaries. |
+| `<out-prefix>.manifest.json` | *(chunked runs only)* plan + chunk prefixes + id_map. |
+
+<Aside type="note">
+The tier GFF3s are **cumulative**: `.tier2.gff3` contains Tiers 1–2, `.tier3.gff3` contains
+Tiers 1–3. Pick the file at the confidence floor you want, or slice the full annotation
+later with [`utils filter --max-tier`](/cli/utils/filter/).
+</Aside>
+
+## Reading the tiers
+
+Tiers rank **evidence strength**, Tier 1 is what you trust most. The assignment is driven
+by the model's ORF and its homology support:
+
+| Tier | Meaning |
+|---|---|
+| **Tier 1** | Coherent CDS **+ protein-homology** support (DIAMOND hit or positive BLAST score). The evidence-backed, highest-confidence set. |
+| **Tier 2** | Coherent CDS but **no homology** (CDS-only), a good ORF without a protein match. |
+| **Tier 3** | Helixer-only backstop, **no projected CDS**, but expressed / low-coverage RNA-seq support, a rescued silent gene. |
+| **Tier 4** | Silent backstop with no CDS and no expression; also where TE-reclassified models are demoted. |
+
+<Aside type="tip">
+Reconciliation **preserves recall**: silent Helixer genes with a valid ORF are kept rather
+than dropped. That is what Tiers 3–4 are for, filter by tier to trade completeness for
+precision, instead of trusting a flat annotation.
+</Aside>
+
+## Reading the biotypes
+
+Biotype is driven by the model's **own ORF**, not by whether evidence happens to corroborate
+it:
+
+- **`protein_coding`**, the model carries a complete/coherent ORF. A good-ORF gene is coding
+  *regardless* of expression or homology; absence of corroboration lowers confidence within
+  coding (flagged `PUTATIVE_CODING`) rather than making it non-coding.
+- **`lncRNA` / `ncRNA`**, no coherent ORF; never placed in Tier 1/2.
+- **`transposable_element`**, only when a TE annotation (`--te-annotation`) is supplied and
+  the model's TE overlap crosses the threshold; demoted to Tier 4.
+
+## The per-gene report
+
+`<prefix>.report.tsv` has one row per gene with these columns:
+
+```text
+gene_id, seqid, start, end, strand, tier, origin, biotype,
+primary_transcript_id, num_isoforms, num_as_events, has_cds, protein_id,
+max_tpm, junction_support, helixer_support, combined_score, aed, flags
+```
+
+Useful columns to scan:
+
+| Column | Tells you |
+|---|---|
+| `tier`, `biotype` | Confidence and coding class (above). |
+| `origin` | Where the model came from (Mikado-reconciled vs `HELIXER_ONLY` backstop). |
+| `num_isoforms`, `num_as_events` | Isoform multiplicity and alternative-splicing events recovered. |
+| `max_tpm`, `junction_support` | RNA-seq expression and splice-junction backing. |
+| `helixer_support`, `combined_score`, `aed` | Predictor confidence, the Mikado score, and annotation edit distance. |
+| `protein_id`, `has_cds` | Homology accession (if any) and whether a CDS was emitted. |
+| `flags` | QC flags, e.g. `PUTATIVE_CODING`, `TE_OVERLAP`, `TIER_n`. |
+
+## Inspect and summarise
+
+```bash
+# Before/after table vs the raw Helixer input
+helixforge stats --helixer helixer_output/Zea-mays-subsp-mays-B73_helixer.gff3 \
+  --helixforge testing-4_chr1.gff3
+
+# Annotation summary (gene/transcript counts, biotypes, CDS lengths)
+helixforge utils summarize --gff3 testing-4_chr1.gff3
+
+# Keep only Tier 1, protein_coding
+helixforge utils filter --gff3 testing-4_chr1.gff3 --out tier1.gff3 --max-tier 1
+```
+
+See [`stats`](/cli/stats/), [`utils summarize`](/cli/utils/summarize/), and
+[`utils filter`](/cli/utils/filter/).
+
+Next: [the preflight you should run before all of this →](/tutorial/preflight/)

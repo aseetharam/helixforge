@@ -46,7 +46,7 @@ class FormatError(ValueError):
 
 
 # Strand / phase vocabularies (GFF3 spec; internally only +/- are used, but the
-# spec allows '.' for strandless and '?' for unknown — accept both in the
+# spec allows '.' for strandless and '?' for unknown, accept both in the
 # *sniffer* so a valid record is never falsely rejected).
 _GFF_STRANDS = frozenset({"+", "-", ".", "?"})
 _GFF_PHASES = frozenset({"0", "1", "2", "."})
@@ -69,7 +69,7 @@ def sniff_fasta(path: str | os.PathLike[str]) -> None:
     """Validate a FASTA: first char ``>``, no bare CR, no empty records.
 
     * The first non-blank byte of the file must be ``>`` (a header).
-    * No bare carriage return (``\\r`` not part of ``\\r\\n``) — a classic
+    * No bare carriage return (``\\r`` not part of ``\\r\\n``), a classic
       Mac/Windows line-ending corruption that splits records mid-stream.
     * No empty record: every header must be followed by at least one
       non-blank sequence line before the next header / EOF.
@@ -87,7 +87,7 @@ def sniff_fasta(path: str | os.PathLike[str]) -> None:
             # Locate the 1-based line (count \n before this byte) + 1.
             line_no = raw.count(b"\n", 0, i) + 1
             raise FormatError(
-                "bare carriage return (\\r) — convert line endings to LF",
+                "bare carriage return (\\r), convert line endings to LF",
                 path=path,
                 line=line_no,
             )

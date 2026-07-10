@@ -3,8 +3,8 @@
 Partition the genome (v1 strategies) + reserve disjoint HFG ranges → plan.json.
 
 Step 1 of the chunked path (plan → tasks → run → aggregate). Cuts the genome
-only in inter-locus gaps wider than ``--min-boundary-gap`` so no gene — and no
-Mikado merge — is ever split, then reserves each chunk a disjoint, contiguous
+only in inter-locus gaps wider than ``--min-boundary-gap`` so no gene, and no
+Mikado merge, is ever split, then reserves each chunk a disjoint, contiguous
 HFG number range (seeded from ``--id-map`` for run-stable ids). The plan is
 consumed by ``parallel tasks``.
 

@@ -52,12 +52,12 @@ class Checkpoint:
                 data: Any = json.loads(self.path.read_text())
             except (json.JSONDecodeError, OSError, ValueError):
                 _log.warning(
-                    "ignoring unreadable checkpoint %s — re-running", self.path
+                    "ignoring unreadable checkpoint %s: re-running", self.path
                 )
                 return {"stages": {}}
             if isinstance(data, dict) and isinstance(data.get("stages"), dict):
                 return data
-            _log.warning("ignoring malformed checkpoint %s — re-running", self.path)
+            _log.warning("ignoring malformed checkpoint %s, re-running", self.path)
         return {"stages": {}}
 
     def is_complete(self, stage: str, outputs: Iterable[str | Path]) -> bool:
@@ -79,14 +79,14 @@ class Checkpoint:
             p = Path(path_str)
             if not p.exists() or p.stat().st_size == 0:
                 _log.info(
-                    "checkpoint stage %r output missing/empty (%s) — re-running",
+                    "checkpoint stage %r output missing/empty (%s), re-running",
                     stage,
                     p,
                 )
                 return False
             if info.get("hash") != cheap_hash(p):
                 _log.info(
-                    "checkpoint stage %r output changed (%s) — re-running", stage, p
+                    "checkpoint stage %r output changed (%s), re-running", stage, p
                 )
                 return False
         return True
@@ -94,7 +94,7 @@ class Checkpoint:
     def mark(self, stage: str, outputs: Iterable[str | Path]) -> None:
         """Record ``stage`` as complete with the current state of ``outputs``.
 
-        No-op when disabled (a cold run leaves no manifest behind — the default
+        No-op when disabled (a cold run leaves no manifest behind, the default
         behavior is byte-identical to pre-Phase-22).
         """
         if not self.enabled:
@@ -111,7 +111,7 @@ class Checkpoint:
         ]
         if missing:
             _log.warning(
-                "not checkpointing stage %r — outputs missing/empty: %s", stage, missing
+                "not checkpointing stage %r: outputs missing/empty: %s", stage, missing
             )
             return
         recorded: dict[str, Any] = {}

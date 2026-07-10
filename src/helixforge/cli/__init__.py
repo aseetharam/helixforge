@@ -454,8 +454,8 @@ def _load_transl_table_map(
     """Parse a per-seqid genetic-code map file → ``{seqid: table_id}``.
 
     Accepts ``seqid=table`` or ``seqid<whitespace>table`` lines; ``#`` comments
-    and blank lines are skipped. Every table id must be a known NCBI code, and —
-    when ``genome_fasta`` is supplied and readable — every seqid must be present
+    and blank lines are skipped. Every table id must be a known NCBI code, and,
+    when ``genome_fasta`` is supplied and readable, every seqid must be present
     in the genome (a typo like ``ChrMt`` vs ``chrMt`` is a clear error, not a
     silent no-op). Raises :class:`click.ClickException` on any problem.
     """
@@ -623,7 +623,7 @@ class IntentGroup(click.Group):
 @click.group(cls=IntentGroup)
 @click.version_option(package_name="helixforge", message="%(prog)s %(version)s")
 def main() -> None:
-    """HelixForge v3 — isoform-aware refinement of Helixer annotations.
+    """HelixForge v3: isoform-aware refinement of Helixer annotations.
 
     \b
     Annotate:            reconcile (one region, whole genome, or --scatter
@@ -986,7 +986,7 @@ Examples:
     "reference",
     default=None,
     type=click.Path(exists=True, dir_okay=False),
-    help="Genome FASTA for CRAM decode — doctor reports whether CRAM "
+    help="Genome FASTA for CRAM decode, doctor reports whether CRAM "
     "BAM inputs have an offline reference (--reference or REF_CACHE).",
 )
 @click.option(
@@ -1013,7 +1013,7 @@ def doctor(
 ) -> None:
     """Preflight: validate inputs + resolve external tools before a run.
 
-    The single input-validation entry point — run it before a real
+    The single input-validation entry point, run it before a real
     ``reconcile``. With no inputs it resolves and versions every external tool
     the pipeline shells out to (mikado, diamond, transdecoder, portcullis, …)
     and checks environment hygiene (console-script shim, CRAM reference). Given
@@ -1023,7 +1023,7 @@ def doctor(
     verifies an emitted Mikado config/scoring file against the detected Mikado
     version.
 
-    Nothing is modified and nothing is annotated — this command only inspects.
+    Nothing is modified and nothing is annotated, this command only inspects.
     It exits non-zero if a required tool is missing, an emitted config fails
     schema verification, or the input-integrity gate fails.
 
@@ -1111,7 +1111,7 @@ def _require_viz(plot_format: str, console: Any) -> bool:
     The standalone ``confidence`` plot options need the optional ``viz`` extra
     (``html`` → plotly, ``png``/``pdf`` → matplotlib). When the backend is
     absent we print a clear install hint and return False so the command still
-    completes (the TSV/BED outputs were already written) — visualization
+    completes (the TSV/BED outputs were already written), visualization
     degrades gracefully instead of crashing with an ImportError traceback.
     """
     import importlib
@@ -1132,7 +1132,7 @@ def _require_viz(plot_format: str, console: Any) -> bool:
 @main.command(
     epilog="""\b
 Examples:
-  # explicit input HDF5 (preferred — enables strand-aware coordinate mapping)
+  # explicit input HDF5 (preferred, enables strand-aware coordinate mapping)
   helixforge confidence -p predictions.h5 -g genes.gff3 \\
       --input-h5 input.h5 -o scores.tsv
 \b
@@ -1291,13 +1291,13 @@ def confidence(
     A standalone, HDF5-only scorer: it reads the Helixer softmax predictions and
     computes multi-factor confidence metrics per gene (class probabilities,
     Shannon entropy, boundary sharpness, CDS coding consistency, per-exon
-    scores). It needs *only* the Helixer HDF5 + a GFF3 — no Mikado, no RNA-seq,
+    scores). It needs *only* the Helixer HDF5 + a GFF3, no Mikado, no RNA-seq,
     no external toolchain. Use ``evidence`` instead to score against RNA-seq /
     protein evidence, and ``reconcile`` to actually build/fix models; this
     command never modifies a model, it only annotates confidence.
 
     Genes are classed high (>=0.85), medium (>=0.70), or low (<0.70), but the
-    scores are genome-relative — prefer a cutoff from the printed distribution
+    scores are genome-relative, prefer a cutoff from the printed distribution
     (or ``--summary-tsv``) over the fixed class thresholds.
 
     Coordinate mapping comes from (in order of preference): ``--input-h5``
@@ -1709,7 +1709,7 @@ Examples:
     help="Reference proteome FASTA for the protein-AED axis. "
     "Comma-separated or repeated. Aligned with miniprot (needs "
     "--genome) unless --miniprot-gff is supplied. NOTE: use a "
-    "TE-filtered proteome — TE proteins align well and would give "
+    "TE-filtered proteome: TE proteins align well and would give "
     "TE models a deceptively low protein_aed.",
 )
 @click.option(
@@ -1733,7 +1733,7 @@ Examples:
     "genome",
     default=None,
     type=click.Path(exists=True, dir_okay=False),
-    help="Genome FASTA — the miniprot target when aligning --proteins "
+    help="Genome FASTA, the miniprot target when aligning --proteins "
     "from scratch. Not needed with --miniprot-gff.",
 )
 @click.option(
@@ -1790,8 +1790,8 @@ Examples:
     type=int,
     show_default=True,
     help="Parallelism dial: process-parallel evidence extraction "
-    "(one BAM/SJ per worker — a single coverage pass per locus, not "
-    "per exon — plus the miniprot run) then process-parallel per-gene "
+    "(one BAM/SJ per worker, a single coverage pass per locus, not "
+    "per exon, plus the miniprot run) then process-parallel per-gene "
     "scoring. Output is identical to -j 1.",
 )
 def evidence(
@@ -1819,7 +1819,7 @@ def evidence(
 
     A standalone, evidence-only scorer. It works on *any* GFF3 (not just
     HelixForge output) and needs only RNA-seq (BAM / STAR SJ / StringTie) and/or
-    protein evidence — no Mikado, no Helixer HDF5, no external toolchain beyond
+    protein evidence, no Mikado, no Helixer HDF5, no external toolchain beyond
     an optional miniprot run. This command only *scores*; it never modifies a
     model (use ``reconcile`` for that), and it scores against evidence rather
     than the Helixer track (use ``confidence`` for that).
@@ -1827,7 +1827,7 @@ def evidence(
     Reports two **separate** AED scores (never fused): ``rna_aed`` (junctions +
     coverage + boundary, from BAM/SJ) and ``protein_aed`` (intron structure + CDS
     coverage + reference-protein coverage, from miniprot). Each is in [0, 1],
-    lower = better, and is populated only when its evidence was supplied —
+    lower = better, and is populated only when its evidence was supplied,
     missing evidence is neutral, not a penalty.
 
     \b
@@ -2049,7 +2049,7 @@ def viz(
 
     Visualizes a reconciled run. Because the rich ``ReconciledGene`` set is not
     serialised to disk, ``viz`` takes the same inputs as ``reconcile`` and
-    rebuilds the gene set via the pipeline before plotting — so it needs the full
+    rebuilds the gene set via the pipeline before plotting, so it needs the full
     pipeline option set, not a finished GFF3.
 
     \b
@@ -2089,7 +2089,7 @@ def viz(
 def benchmark() -> None:
     """Benchmark an annotation (all tools) or run the ablation figure engine.
 
-    Developer / paper-figure tooling — hidden from the main command list (it is
+    Developer / paper-figure tooling, hidden from the main command list (it is
     not part of the annotation workflow), but still fully runnable.
     """
 
@@ -2220,7 +2220,7 @@ def ablation_cmd(
     Reruns the full reconciliation once per ``--variants`` entry (e.g. ``full``,
     ``no_helixer_support``, ``no_reference_flag``, ``no_pad``,
     ``strict_vs_permissive``), benchmarks each output, and tabulates the metrics
-    side by side — the engine behind the manuscript ablation figure. Takes the
+    side by side, the engine behind the manuscript ablation figure. Takes the
     full ``reconcile`` option set since it re-runs the pipeline for each variant.
 
     \b
@@ -2361,8 +2361,8 @@ def parallel_plan(
     """Partition the genome (v1 strategies) + reserve disjoint HFG ranges → plan.json.
 
     Step 1 of the chunked path (plan → tasks → run → aggregate). Cuts the genome
-    only in inter-locus gaps wider than ``--min-boundary-gap`` so no gene — and no
-    Mikado merge — is ever split, then reserves each chunk a disjoint, contiguous
+    only in inter-locus gaps wider than ``--min-boundary-gap`` so no gene, and no
+    Mikado merge, is ever split, then reserves each chunk a disjoint, contiguous
     HFG number range (seeded from ``--id-map`` for run-stable ids). The plan is
     consumed by ``parallel tasks``.
 
@@ -2491,7 +2491,7 @@ def parallel_tasks(
     Step 2 of the chunked path. Expands a command template over every chunk in
     plan.json; the default template is a per-chunk ``helixforge reconcile`` built
     from the inputs you attach, so it works out of the box. Run the resulting file
-    with any executor — GNU parallel, a Slurm array, xargs, HyperShell — then
+    with any executor (GNU parallel, a Slurm array, xargs, HyperShell), then
     ``parallel aggregate`` the per-chunk outputs.
 
     \b
@@ -2606,7 +2606,7 @@ def parallel_aggregate(
 
     \b
     Outputs (under the resolved prefix):
-    - <prefix>.gff3 (+ .tier1/2/3.gff3) and <prefix>.report.tsv — the merged
+    - <prefix>.gff3 (+ .tier1/2/3.gff3) and <prefix>.report.tsv, the merged
       annotation + per-gene report (same columns as ``reconcile``)
     - the master id_map.json (created if absent)
     - a printed summary: num_genes, num_loci, tier_counts, origin_counts
@@ -2686,7 +2686,7 @@ def parallel_suggest(
     Step 0 of the chunked path. From the genome size/scaffold profile and your
     node spec (``--cores-per-node``, ``--mem-per-node``, ``--max-array-size``,
     ``--walltime-cap``) it suggests a granularity and per-chunk resources to feed
-    into ``parallel plan`` / ``run --scatter``. Heuristic only — it reads sizes,
+    into ``parallel plan`` / ``run --scatter``. Heuristic only, it reads sizes,
     runs nothing, and modifies nothing.
 
     \b

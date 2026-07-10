@@ -15,7 +15,7 @@ TpmRecord = tuple[str, int, int, tuple[tuple[int, int], ...], float]
 def _parse_attributes(attr_field: str) -> dict[str, str]:
     """Parse a GTF column-9 attribute string into a dict.
 
-    Attributes look like ``key "value"; key2 "value2";`` — values may or may not
+    Attributes look like ``key "value"; key2 "value2";``, values may or may not
     be quoted. Keys are returned verbatim (caller lowercases as needed).
     """
     attrs: dict[str, str] = {}
@@ -118,7 +118,7 @@ class StringTieParser:
                 continue
             # StringTie emits unstranded ('.') transcripts (single-exon, no
             # junction); the data model requires +/- and Mikado cannot use them
-            # as stranded evidence — skip them.
+            # as stranded evidence: skip them.
             rec_strand = rec["strand"]
             assert isinstance(rec_strand, str)
             if rec_strand not in ("+", "-"):
@@ -207,7 +207,7 @@ class StringTieParser:
         Returns ``{structure_key: {representative, max_tpm, mean_tpm,
         num_samples, sample_tpms}}``. Only structures with ``max_tpm >= min_tpm``
         and ``num_samples >= min_samples`` are kept. This feeds classification
-        and the TPM external metric — **not** isoform selection (Mikado does the
+        and the TPM external metric, **not** isoform selection (Mikado does the
         real cross-sample reconciliation later).
         """
         groups: dict[str, dict[str, object]] = {}
@@ -337,7 +337,7 @@ def best_overlapping_tpm(
     best_tpm: float | None = None
     for st_strand, st_start, st_end, st_exons, tpm in index.get(seqid, ()):
         if st_strand != strand or st_start >= m_hi or st_end <= m_lo:
-            continue  # wrong strand or spans disjoint — cheap reject
+            continue  # wrong strand or spans disjoint, cheap reject
         overlap = _exonic_overlap(model, st_exons)
         if overlap > best_overlap or (
             overlap == best_overlap

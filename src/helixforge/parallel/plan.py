@@ -163,7 +163,7 @@ def partition_genome(
     becomes one chunk. Returns a :class:`Plan`; call :func:`reserve_id_ranges`
     next to fill the HFG ranges.
 
-    **Small-scaffold bin-packing** — when
+    **Small-scaffold bin-packing**, when
     ``pack_small_scaffolds`` is set, every *whole, uncut* scaffold at or below
     ``small_scaffold_bp`` is packed together with other small scaffolds into
     combined chunks (each carrying several bare-seqid ``regions``), so a
@@ -278,7 +278,7 @@ def partition_by_strategy(
 
     This is the CLI ``parallel plan`` entry point: it adopts v1's transparent
     ``--strategy {scaffold,size,genes,adaptive}`` vocabulary
-    (:mod:`helixforge.parallel.chunker`) while keeping v3's two guarantees — no
+    (:mod:`helixforge.parallel.chunker`) while keeping v3's two guarantees, no
     gene is ever split across a chunk (every cut lands in an inter-locus gap
     ``>= min_boundary_gap``), and each chunk owns a disjoint set of master loci so
     :func:`reserve_id_ranges` can hand out globally-unique HFG ranges.
@@ -397,7 +397,7 @@ def _validate_partition(plan: Plan, loci: list[HelixerLocus]) -> None:
     """
     covers: dict[str, list[tuple[int | None, int | None, str]]] = {}
     # A whole-scaffold (bare seqid) region must be the *only* region for its
-    # seqid — a packed scaffold can never also be cut/packed elsewhere.
+    # seqid: a packed scaffold can never also be cut/packed elsewhere.
     whole_scaffold_owner: dict[str, str] = {}
     for chunk in plan.chunks:
         for region in chunk.regions:
@@ -408,7 +408,7 @@ def _validate_partition(plan: Plan, loci: list[HelixerLocus]) -> None:
                     raise ValueError(
                         f"scaffold {seqid} appears as a whole-scaffold region in "
                         f"two chunks ({whole_scaffold_owner[seqid]}, "
-                        f"{chunk.chunk_id}) — a packed scaffold must be owned once"
+                        f"{chunk.chunk_id}), a packed scaffold must be owned once"
                     )
                 whole_scaffold_owner[seqid] = chunk.chunk_id
 
@@ -495,7 +495,7 @@ def reserve_id_ranges(
     if base_cursor > NOVEL_ID_BASE:
         _log.warning(
             "reserved Helixer-anchored range reaches %d, at/over the novel base "
-            "%d — raise NOVEL_ID_BASE or reduce the genome's locus count",
+            "%d, raise NOVEL_ID_BASE or reduce the genome's locus count",
             base_cursor,
             NOVEL_ID_BASE,
         )

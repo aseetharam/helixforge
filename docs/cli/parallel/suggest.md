@@ -5,7 +5,7 @@ Recommend chunk count + per-chunk resources (heuristic; prints trade-offs).
 Step 0 of the chunked path. From the genome size/scaffold profile and your
 node spec (``--cores-per-node``, ``--mem-per-node``, ``--max-array-size``,
 ``--walltime-cap``) it suggests a granularity and per-chunk resources to feed
-into ``parallel plan`` / ``run --scatter``. Heuristic only — it reads sizes,
+into ``parallel plan`` / ``run --scatter``. Heuristic only, it reads sizes,
 runs nothing, and modifies nothing.
 
 Output (printed recommendation): target_chunks, target_loci_per_chunk,

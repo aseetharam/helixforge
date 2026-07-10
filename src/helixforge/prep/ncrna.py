@@ -142,7 +142,7 @@ def build_ncrna_genes(
 
     Each record is ``(seqid, start, end, strand, biotype)`` (internal 0-based
     half-open). Genes are origin ``novel`` (no Helixer anchor), Tier 4 (no
-    CDS/expression evidence — the biotype carries the meaning), flagged
+    CDS/expression evidence, the biotype carries the meaning), flagged
     ``NOVEL_LOCUS``, and ids ``HFG_<id_base+i>``. Sorted by ``(seqid, start)``.
     """
     from helixforge.reconcile.models import (

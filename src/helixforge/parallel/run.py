@@ -33,12 +33,12 @@ _log = get_logger(__name__)
 
 @dataclass
 class RunResult:
-    """Outcome of :func:`run_genome` — what ran, where it landed."""
+    """Outcome of :func:`run_genome`, what ran, where it landed."""
 
     mode: str  # "single" | "scatter-local" | "scatter-hypershell" | "scatter-slurm"
     manifest_path: Path
     out_prefix: str
-    genes: list[Any] | None = None  # single mode — list[ReconciledGene] at runtime
+    genes: list[Any] | None = None  # single mode, list[ReconciledGene] at runtime
     aggregate: Any | None = None  # AggregateResult (scatter-local)
     plan: Any | None = None  # Plan
     chunk_prefixes: list[str] = field(default_factory=list)
@@ -170,7 +170,7 @@ def run_genome(
     ``ProcessPoolExecutor`` (``workers``) then aggregates; ``"hypershell"`` runs
     them now via ``hs cluster`` (``num_tasks`` concurrency, defaults to
     ``workers``) then aggregates; ``"slurm"`` emits a Slurm array (one chunk/task)
-    and stops — the user submits it and re-invokes ``aggregate`` afterward.
+    and stops, the user submits it and re-invokes ``aggregate`` afterward.
     ``stitch`` (local/hypershell) reports boundary-recoverable
     cross-chunk merges (D4). Honors per-chunk + global checkpoint/resume via
     ``base_config.resume`` (carried into every chunk config).
@@ -180,7 +180,7 @@ def run_genome(
 
     # --- single-process path: byte-identical to run_pipeline ---
     if scatter == "off":
-        _log.info("[run] scatter=off — single-process pipeline")
+        _log.info("[run] scatter=off, single-process pipeline")
         genes = run_pipeline(base_config)
         resolved = _dump_resolved_config(base_config, out_prefix)
         manifest = _write_manifest(

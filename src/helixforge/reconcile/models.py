@@ -43,7 +43,7 @@ RECONCILED_ORIGINS = (
 #
 # ``CORE_GENE_BIOTYPES`` are the four values ``assign_biotype`` derives from the
 # pipeline's own signals; ``STRUCTURED_NCRNA_BIOTYPES`` come only from the
-# external structured-ncRNA hook. ``GENE_BIOTYPES`` is their union — the full set
+# external structured-ncRNA hook. ``GENE_BIOTYPES`` is their union, the full set
 # the models accept.
 CORE_GENE_BIOTYPES = (
     "protein_coding",
@@ -94,7 +94,7 @@ def _validate_phase(phase: object) -> None:
 
 
 def _validate_fraction(value: object, name: str) -> None:
-    """Value in [0, 1] (or ``None`` — caller decides whether None is allowed)."""
+    """Value in [0, 1] (or ``None``, caller decides whether None is allowed)."""
     if value is None:
         return
     if not 0.0 <= float(value) <= 1.0:  # type: ignore[arg-type]
@@ -163,7 +163,7 @@ def _validate_cds_total_mod3(
     The mod-3 invariant holds for **complete** ORFs (start + stop present). Real
     Mikado/TransDecoder output also contains *partial* ORFs (5'/3'-partial, at
     contig edges or genuinely incomplete genes) whose total CDS length need not
-    be a multiple of 3 — reading frame is preserved by the GFF3 ``phase`` on the
+    be a multiple of 3, reading frame is preserved by the GFF3 ``phase`` on the
     5'-most coding segment. When ``partial`` is set, the mod-3 check is skipped;
     all other CDS invariants (within-exon, sorted, non-overlapping) still apply.
     """
@@ -226,7 +226,7 @@ class CDSSegment:
 # --- splice-site motif classes ---
 # A junction's donor/acceptor dinucleotides classify (strand-aware) into one
 # canonical class or 'non-canonical'. ``None`` means the motif was never
-# evaluated (no genome / no STAR motif column) — distinct from 'non-canonical'.
+# evaluated (no genome / no STAR motif column), distinct from 'non-canonical'.
 # AT-AC is the minor (U12) spliceosome motif and counts as canonical here.
 SPLICE_GT_AG = "GT-AG"
 SPLICE_GC_AG = "GC-AG"
@@ -277,7 +277,7 @@ class SpliceJunction:
     def is_canonical(self) -> bool:
         """True iff the motif was evaluated and is a canonical class.
 
-        ``None`` (never evaluated) returns False — callers that must treat an
+        ``None`` (never evaluated) returns False, callers that must treat an
         unevaluated junction as "not known non-canonical" should test
         ``canonical in CANONICAL_SPLICE_MOTIFS or canonical is None``.
         """
@@ -419,7 +419,7 @@ class TranscriptCandidate:
     exons: list[Exon]
     cds: list[CDSSegment] | None = None
     # Partial-ORF granularity: 5'-partial means no start codon,
-    # 3'-partial means no stop codon. They are independent — a transcript can be
+    # 3'-partial means no stop codon. They are independent, a transcript can be
     # 5'-partial-but-3'-complete, in which case the stop is still verifiable. The
     # mod-3 exemption keys on *either* end being partial; the codon gate keys on
     # the matching end (start↔5', stop↔3'). ``cds_partial`` is the derived OR.
@@ -433,7 +433,7 @@ class TranscriptCandidate:
     combined_score: float | None = None
     is_primary: bool = False
     # Transcript-level biotype (Ensembl ``transcript_biotype``), one of
-    # GENE_BIOTYPES or None. The carrier deferred from Phase 29 — set by Phase 30's
+    # GENE_BIOTYPES or None. The carrier deferred from Phase 29, set by Phase 30's
     # ``assign_biotype`` (mirrors the gene biotype onto the transcripts) so the
     # GFF3/GTF can emit ``transcript_biotype`` per mRNA. None keeps every existing
     # construction valid and the golden output unchanged until a phase sets it.
@@ -441,7 +441,7 @@ class TranscriptCandidate:
     # TRaCE election rank (Phase 33b): the 1-based position of this transcript in
     # the Transcript Ranking and Canonical Election ordering (1 = elected
     # canonical/primary). ``None`` means TRaCE was not run (the default, off-by-
-    # default path) — the primary is then the highest-``combined_score`` isoform.
+    # default path), the primary is then the highest-``combined_score`` isoform.
     # An optional carrier only: a None default leaves every existing construction
     # and the golden output byte-for-byte unchanged.
     trace_rank: int | None = None

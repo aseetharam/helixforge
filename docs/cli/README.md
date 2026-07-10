@@ -1,8 +1,8 @@
-# HelixForge — Command-line reference
+# HelixForge Command-line reference
 
-> Auto-generated from the `helixforge` click app by `scripts/gen_cli_reference.py`. Do not edit by hand — run the script (or let the pre-commit/CI drift gate regenerate it). Each command's description, options, and examples come straight from its docstring and epilog, so this reference cannot drift from the code.
+> Auto-generated from the `helixforge` click app by `scripts/gen_cli_reference.py`. Do not edit by hand, run the script (or let the pre-commit/CI drift gate regenerate it). Each command's description, options, and examples come straight from its docstring and epilog, so this reference cannot drift from the code.
 
-HelixForge v3 — isoform-aware refinement of Helixer annotations.
+HelixForge v3: isoform-aware refinement of Helixer annotations.
 
 | Command | Description |
 |---|---|

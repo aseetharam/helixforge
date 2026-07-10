@@ -74,7 +74,7 @@ def assign_biotype(
     """Return ``gene`` with its ``biotype`` (and a coherent tier) assigned.
 
     A gene that already carries a non-None ``biotype`` (e.g. a Phase-29
-    ``pseudogene``) is returned unchanged — an explicit biotype set upstream wins.
+    ``pseudogene``) is returned unchanged, an explicit biotype set upstream wins.
     Otherwise the gene biotype is derived via :func:`classify_biotype`, mirrored
     onto every transcript (so the GFF3/GTF can emit ``transcript_biotype`` per
     mRNA), and a non-coding biotype demotes a Tier-1/2 gene to its coherent
@@ -93,7 +93,7 @@ def assign_biotype(
         new_tier = _coherent_noncoding_tier(gene)
     transcripts = [attrs.evolve(t, biotype=biotype) for t in gene.transcripts]
     flags = gene.flags
-    # A coding gene resting solely on its own ORF — no expression, no homology —
+    # A coding gene resting solely on its own ORF: no expression, no homology,
     # is honestly *putative* coding (the call stands; we only mark its support
     # level). Expression/homology adjust confidence within coding, never biotype.
     if biotype == "protein_coding":

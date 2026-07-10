@@ -27,7 +27,7 @@ _GeneDict = dict[str, Any]
 
 
 # ---------------------------------------------------------------------------
-# Input normalisation — ReconciledGene list OR Helixer GFF3 path → common shape
+# Input normalisation: ReconciledGene list OR Helixer GFF3 path → common shape
 # ---------------------------------------------------------------------------
 
 
@@ -172,7 +172,7 @@ def _helixer_support_for(
 
 
 # ---------------------------------------------------------------------------
-# D2.1 — annotation summary
+# D2.1, annotation summary
 # ---------------------------------------------------------------------------
 
 
@@ -195,7 +195,7 @@ def annotation_summary(
       (:func:`compute_aed`). For ``ReconciledGene`` input the model's stored
       fields drive it (protein coverage via ``cds_completeness`` when ``genome``
       + ``protein_lengths`` are present). For a Helixer GFF3 the only available
-      signal is junction support, computed against ``junction_set`` when given —
+      signal is junction support, computed against ``junction_set`` when given,
       so the before/after AED delta is real; with no signal it stays ``NaN``.
     - ``mean_helixer_support`` is the per-gene (primary-transcript) Helixer
       support from ``h5_reader`` (the SAME HDF5 drives before and after), or
@@ -338,13 +338,13 @@ def _is_complete(
 
 
 # ---------------------------------------------------------------------------
-# Completeness metrics — Phase 11 routes these through the real bench tools
+# Completeness metrics: Phase 11 routes these through the real bench tools
 # ---------------------------------------------------------------------------
 #
 # These run a real external tool ONLY when enough inputs are present: a
 # ``ReconciledGene`` list (we can translate proteins), an open ``genome``, and a
-# ``lineage``/``database``. Otherwise — including every GFF3-path input and the
-# default no-lineage call from ``before_after_table`` — they return ``NaN`` (the
+# ``lineage``/``database``. Otherwise, including every GFF3-path input and the
+# default no-lineage call from ``before_after_table``, they return ``NaN`` (the
 # Phase-9 behaviour, preserved). Any tool failure also degrades to ``NaN`` so the
 # stats table is never sunk by a missing benchmarking binary.
 
@@ -371,7 +371,7 @@ def _proteome_metric(
         value = pick(result)
         return NAN if value is None else value
     except (BenchmarkError, OSError, ValueError) as exc:
-        # Narrow the catch to the *expected* degradations —
+        # Narrow the catch to the *expected* degradations:
         # a missing/failed external tool (BenchmarkError), an I/O error (OSError),
         # or an unparseable stats file (ValueError). A genuine code bug (TypeError,
         # AttributeError, …) must NOT masquerade as a NaN metric: it propagates.
@@ -428,7 +428,7 @@ def omark_score(
 
 
 # ---------------------------------------------------------------------------
-# D2.2 — before/after delta table + Markdown summary
+# D2.2, before/after delta table + Markdown summary
 # ---------------------------------------------------------------------------
 
 _DELTA_METRICS: tuple[tuple[str, str], ...] = (
@@ -474,13 +474,13 @@ def before_after_table(
 
     Optional drivers populate the previously-stubbed columns:
 
-    - ``h5_path`` — Helixer confidence HDF5 → the ``Mean Helixer support`` row is
+    - ``h5_path``, Helixer confidence HDF5 → the ``Mean Helixer support`` row is
       computed for **both** the Helixer input and the reconciled output from the
       same HDF5, so its Δ is meaningful (the ``no_helixer_support`` ablation aside,
       this is the headline coupling metric). Cleanly ``NaN`` when absent.
-    - ``junctions`` — a ``SpliceJunction`` list → a real junction signal for the
+    - ``junctions``, a ``SpliceJunction`` list → a real junction signal for the
       Helixer set's AED (the reconciled set carries its own).
-    - ``protein_lengths`` + ``genome`` — protein coverage feeds the reconciled
+    - ``protein_lengths`` + ``genome``, protein coverage feeds the reconciled
       AED via ``cds_completeness``.
 
     BUSCO/compleasm/OMArk rows stay ``NaN`` unless a lineage/database is wired
@@ -541,7 +541,7 @@ def _fmt(v: Any) -> str:
 def write_summary(df: pd.DataFrame, md_path: str) -> str:
     """Render the delta table to a one-page Markdown table (manuscript figure)."""
     lines = [
-        "# HelixForge v3 — before/after summary",
+        "# HelixForge v3, before/after summary",
         "",
         "| Metric | Helixer | HelixForge | Δ |",
         "| --- | ---: | ---: | ---: |",

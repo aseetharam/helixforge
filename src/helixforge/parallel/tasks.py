@@ -342,7 +342,7 @@ def run_local(
 ) -> list[Path]:
     """Run every chunk through a bounded pool; return per-chunk output prefixes.
 
-    ``_executor_cls`` is a test seam — the unit suite injects a
+    ``_executor_cls`` is a test seam, the unit suite injects a
     ``ThreadPoolExecutor`` so a mocked :func:`run_pipeline` is observed in-process
     (a real process pool would re-import the unpatched module). Production uses
     the default ``ProcessPoolExecutor``.

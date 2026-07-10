@@ -4,7 +4,7 @@ Render per-locus plots, interactive pages, or browser tracks for a run.
 
 Visualizes a reconciled run. Because the rich ``ReconciledGene`` set is not
 serialised to disk, ``viz`` takes the same inputs as ``reconcile`` and
-rebuilds the gene set via the pipeline before plotting — so it needs the full
+rebuilds the gene set via the pipeline before plotting, so it needs the full
 pipeline option set, not a finished GFF3.
 
 Output (written under --out-dir), by --mode:

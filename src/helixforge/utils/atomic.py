@@ -15,7 +15,7 @@ def _target_mode(path: str | Path) -> int:
     """Permission bits the final file should carry.
 
     Reuse an existing target's mode on overwrite (so ``atomic_write`` is
-    transparent); otherwise the umask-respecting default ``0o666 & ~umask`` —
+    transparent); otherwise the umask-respecting default ``0o666 & ~umask``,
     ``mkstemp``'s private ``0o600`` must not leak onto a freshly created file.
     """
     p = Path(path)

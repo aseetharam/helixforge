@@ -84,7 +84,7 @@ class Suggestion:
         """A human-readable recommendation block (heuristics, with trade-offs)."""
         s = self.stats
         lines = [
-            "HelixForge parallel — suggested plan (HEURISTIC, not a guarantee)",
+            "HelixForge parallel: suggested plan (HEURISTIC, not a guarantee)",
             f"  genome size      : {s.genome_size:,} bp",
             f"  scaffolds        : {s.scaffold_count:,} (N50 {s.n50:,}, largest {s.largest:,})",
             "",
@@ -133,7 +133,7 @@ def suggest_plan(
     if by_size > max_array_size:
         rationale.append(
             f"sequence target wanted {by_size} chunks but the array cap is "
-            f"{max_array_size}; clamped — chunks will be larger / slower"
+            f"{max_array_size}; clamped, chunks will be larger / slower"
         )
     else:
         rationale.append(

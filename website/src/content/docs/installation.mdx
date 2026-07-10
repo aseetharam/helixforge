@@ -1,0 +1,93 @@
+---
+title: Installation
+description: Install HelixForge with pip, choose the right extras, install the external tools it drives, and verify the environment with helixforge doctor.
+---
+
+import { Tabs, TabItem, Steps, Aside } from '@astrojs/starlight/components';
+
+HelixForge requires **Python 3.10 or newer**.
+
+## Install the Python package
+
+<Tabs>
+  <TabItem label="pip">
+```bash
+pip install helixforge
+```
+  </TabItem>
+  <TabItem label="from source">
+```bash
+git clone https://github.com/aseetharam/helixforge
+cd helixforge
+pip install -e ".[cli,stats]"
+```
+  </TabItem>
+</Tabs>
+
+The console script `helixforge` is installed on your `PATH`. The command-line interface
+(`click`) and result rendering (`rich`) are part of the base install, so a bare
+`pip install helixforge` gives you a working CLI.
+
+## Extras
+
+Optional feature sets, installed with `pip install "helixforge[<extra>]"`:
+
+| Extra | Adds |
+|---|---|
+| `cli` | command-line interface (click, rich) |
+| `stats` | tidy stats tables (pandas) |
+| `viz` | plotting and locus figures (matplotlib, plotly, dna-features-viewer) |
+| `bigwig`, `tracks` | bigWig coverage support (pyBigWig) |
+| `hpc` | [HyperShell](https://hypershell.readthedocs.io) distributed execution backend |
+| `dev` | test and type-check baseline |
+
+<Aside type="note">
+The `hpc` extra pulls HyperShell, which requires Python ≥ 3.11. The core install stays
+Python-3.10 compatible.
+</Aside>
+
+## External tools
+
+HelixForge drives several bioinformatics tools as **subprocesses**. They are *not* Python
+dependencies and must be installed separately (conda or container):
+
+- **Mikado**, the reconciliation engine
+- **TransDecoder**, ORF calling for the backstop
+- **DIAMOND**, protein homology search
+- **Portcullis**, splice-junction filtering
+- **miniprot**, protein-to-genome alignment
+- **StringTie**, reference-free transcript assembly
+- **STAR**, RNA-seq read alignment
+- **samtools**, BAM/CRAM handling
+
+<Aside type="tip">
+A container that already bundles these tools (an `apptainer`/Singularity `.sif`) is the
+simplest way to get a reproducible environment. The [maize tutorial](/tutorial/inputs/)
+runs everything through `apptainer exec helixforge.sif …`.
+</Aside>
+
+## Preflight with `doctor`
+
+Verify the whole environment **before** a long run:
+
+```bash
+helixforge doctor
+```
+
+<Steps>
+
+1. It **resolves and versions every external tool** the pipeline shells out to (mikado,
+   diamond, transdecoder, portcullis, …) and reports the path and detected version.
+
+2. It **checks environment hygiene**, the console-script shim and CRAM reference setup.
+
+3. Given `--genome` + `--helixer` (and optional evidence), it runs the **input-integrity
+   preflight**: seqid concordance across inputs, GFF3/GTF/FASTA/BAM format sniffing, and
+   BAM/CRAM index presence.
+
+</Steps>
+
+It exits non-zero if a required tool is missing or a gate fails, so a misconfigured
+environment fails in **seconds rather than hours**. Nothing is modified, `doctor` only
+inspects. See the [`doctor` CLI reference](/cli/doctor/) for all options, and the
+[preflight tutorial step](/tutorial/preflight/) for the maize invocation.

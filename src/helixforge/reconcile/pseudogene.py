@@ -23,7 +23,7 @@ def _homology_backed(transcript: TranscriptCandidate, min_homology: float) -> bo
     """True when the ORF has protein-homology coverage above ``min_homology``.
 
     A real hit accession (``protein_id``) always counts. Otherwise the BLAST/
-    DIAMOND score must be present **and** at/above ``min_homology`` — so a stronger
+    DIAMOND score must be present **and** at/above ``min_homology``, so a stronger
     threshold demands stronger homology evidence than the bare ``has_homology``
     gate. With the default ``min_homology=0.0`` this reduces to ``has_homology``.
     """
@@ -41,7 +41,7 @@ def _has_disabling_lesion(gene: ReconciledGene, gate_flags: Iterable[QCFlag]) ->
 
     The premature-stop signal is taken from the structural codon gate
     (``INTERNAL_STOP``) so the two cannot disagree. A complete CDS whose total
-    length is not divisible by 3 is a frameshift lesion (defense in depth — the
+    length is not divisible by 3 is a frameshift lesion (defense in depth, the
     model normally blocks this at construction). A *partial* ORF (missing start/
     stop) is **not** a lesion: it is a truncated-but-valid ORF, not a disabled one.
     """
@@ -64,7 +64,7 @@ def is_pseudogene_candidate(
     """Whether ``gene`` is a homology-backed disabled ORF (pseudogene candidate).
 
     Requires (1) a CDS, (2) homology coverage above ``min_homology``, and (3) a
-    disabling lesion (premature stop / mod-3 frameshift). All three are needed —
+    disabling lesion (premature stop / mod-3 frameshift). All three are needed,
     a broken ORF *without* homology stays a normal flagged coding gene.
     """
     gate_flags = list(gate_flags)

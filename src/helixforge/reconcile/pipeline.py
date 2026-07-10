@@ -1,4 +1,4 @@
-"""Pipeline orchestration — the HelixForge Python API."""
+"""Pipeline orchestration: the HelixForge Python API."""
 
 from __future__ import annotations
 
@@ -88,9 +88,9 @@ _log = get_logger(__name__)
 # The ~60-field flat ``PipelineConfig`` is grouped
 # into five validated sub-configs (``ClassificationConfig``, ``ASConfig``,
 # ``ReconcileConfig``, ``ValidationConfig``, ``ResourceConfig``). To keep every
-# existing construction path working byte-for-byte — ``PipelineConfig(min_tpm=…)``
+# existing construction path working byte-for-byte: ``PipelineConfig(min_tpm=…)``
 # in tests, ``dataclasses.replace(cfg, pad=…)`` in the ablation runner / chunk
-# builder, and the CLI's flat-kwargs mapping — **the flat fields stay on
+# builder, and the CLI's flat-kwargs mapping, **the flat fields stay on
 # PipelineConfig**. The sub-configs are exposed as validated *views* (read
 # properties), their per-field validators run at construction via
 # ``__post_init__``, and ``from_flat`` / the YAML round-trip (D2) move between the
@@ -246,7 +246,7 @@ class PipelineConfig:
     """All inputs, tool paths, and tuning knobs for one ``run_pipeline`` call.
 
     Defaults mirror Mikado's recommended settings and the downstream functions' own defaults
-    (classification, AS knobs, reconciliation, validation) — they are *reused*,
+    (classification, AS knobs, reconciliation, validation), they are *reused*,
     not reinvented. Only ``genome_fasta`` and ``helixer_gff3`` are required.
     """
 
@@ -270,7 +270,7 @@ class PipelineConfig:
     transdecoder_bin_dir: str | None = None
     # Per-backstop-gene TransDecoder ORF fallback (cds.py). Off by default: on a
     # real genome it spawns one TransDecoder subprocess per CDS-less backstop
-    # gene (hundreds), which is rarely worth it — miniprot is the primary source.
+    # gene (hundreds), which is rarely worth it, miniprot is the primary source.
     backstop_transdecoder: bool = False
     portcullis_bin: str | None = None
     mikado_bin: str = "mikado"
@@ -298,7 +298,7 @@ class PipelineConfig:
     # --- genome-level report. On by default: a run
     #     emits ``<prefix>.report.json`` (MultiQC-compatible) + ``.report.html``
     #     summarising structure / biotype / tier / completeness / evidence
-    #     support. Reporting only — count-neutral (never changes the gene set);
+    #     support. Reporting only, count-neutral (never changes the gene set);
     #     best-effort, so a report failure never sinks a finished run. ---
     write_report: bool = True
 
@@ -306,7 +306,7 @@ class PipelineConfig:
     #     the emitted GFF3 carries ``##sequence-region`` directives (one per
     #     contig) and a ``#!`` provenance preamble (HelixForge version, resolved
     #     external-tool versions, the parameter hash, input MD5s) so the output is
-    #     self-describing and gt-gff3validator / AGAT clean. Header-only — purely
+    #     self-describing and gt-gff3validator / AGAT clean. Header-only, purely
     #     count-neutral (the parsed gene/tier counts never change). ``embed_fasta``
     #     additionally appends the genome after ``##FASTA`` (off by default; large).
     gff3_sequence_regions: bool = True
@@ -340,7 +340,7 @@ class PipelineConfig:
     #     serialise steps are skipped (their artifacts reused) and only
     #     ``mikado pick`` reruns. Valid only for knobs that do NOT change the
     #     prepared transcripts or the serialise DB (pad / scoring_profile /
-    #     AS knobs) — the ablation runner sets it solely for those variants.
+    #     AS knobs), the ablation runner sets it solely for those variants.
     reuse_mikado_dir: str | None = None
 
     # --- stage checkpoint/resume (Phase 22 §3.1). Off by default reproduces the
@@ -450,7 +450,7 @@ class PipelineConfig:
     # Off by default. An optional **decomposed** VCF (multiallelic sites split via
     # `bcftools norm -m -`) flags genes whose CDS overlaps a high-impact variant
     # (premature stop / splice-disrupting / frameshift) with VARIANT_IMPACTED.
-    # Input plumbing + flag only — never re-types/re-tiers; with no vcf_path (the
+    # Input plumbing + flag only: never re-types/re-tiers; with no vcf_path (the
     # default/golden path) it is a no-op. Full pangenome projection is future work.
     vcf_path: str | None = None
     vcf_flag_impact: bool = False
@@ -460,7 +460,7 @@ class PipelineConfig:
     # features is flagged (TE_OVERLAP) and a good-ORF gene above
     # ``te_overlap_threshold`` is reclassified ``transposable_element``. Only the
     # configured ``te_classes`` (EDTA Classification orders; None = the true-TE
-    # default set) count — knob/satellite/centromere/rDNA/low-complexity are
+    # default set) count, knob/satellite/centromere/rDNA/low-complexity are
     # excluded. With no te_annotation (the default/golden path) it is a no-op.
     te_annotation: str | None = None
     te_overlap_threshold: float = 0.5
@@ -594,7 +594,7 @@ class PipelineConfig:
             import yaml
         except ImportError:
             _log.warning(
-                "PyYAML unavailable — skipping resolved-config dump to %s", path
+                "PyYAML unavailable: skipping resolved-config dump to %s", path
             )
             return None
         with atomic_write(str(path)) as fh:
@@ -695,7 +695,7 @@ def _parse_prepared_gtf(
     """Minimal reader for ``mikado_prepared.gtf`` → ``{tid: (seqid, strand, [Exon])}``.
 
     Unlike ``StringTieParser`` this keeps **every** prepared transcript (no TPM
-    filter) — each needs an external-scores row. Coordinates are converted from
+    filter), each needs an external-scores row. Coordinates are converted from
     1-based GTF to internal 0-based half-open here (I/O boundary).
     """
     records: dict[str, dict[str, Any]] = {}
@@ -741,7 +741,7 @@ def _build_external_scores(
 
     When no HDF5 is available the Helixer-derived metrics default to ``0.0``
     (neutral; logged once by the caller) so Mikado still gets a complete TSV.
-    ``helixer_weight`` scales the two Helixer metrics (the ablation lever — 0.0
+    ``helixer_weight`` scales the two Helixer metrics (the ablation lever, 0.0
     switches the Helixer↔evidence coupling off; result stays in [0, 1]).
     """
     prepared = _parse_prepared_gtf(prepared_gtf)
@@ -778,7 +778,7 @@ def _patch_as_knobs(config_path: str | Path, knobs: dict[str, Any]) -> None:
         import yaml
     except ImportError:
         _log.warning(
-            "PyYAML unavailable — using mikado configure AS defaults; set "
+            "PyYAML unavailable: using mikado configure AS defaults; set "
             "pick.alternative_splicing manually for the strict benchmark."
         )
         return
@@ -796,14 +796,14 @@ def _should_run_mikado(config: PipelineConfig) -> bool:
     The MIKADO chain includes DIAMOND
     homology and a ``serialise`` that needs ``--blast_targets``; without a
     protein DB or StringTie assemblies there is nothing to reconcile, so the
-    pipeline degrades to the Helixer-backstop path (basic mode) — every gene is
+    pipeline degrades to the Helixer-backstop path (basic mode), every gene is
     carried through as ``helixer_backstop``.
     """
     return bool(config.stringtie_list) and bool(config.protein_db)
 
 
 # ---------------------------------------------------------------------------
-# Stage A — input loading
+# Stage A: input loading
 # ---------------------------------------------------------------------------
 
 
@@ -912,7 +912,7 @@ def _load_inputs(config: PipelineConfig) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Stage B — Mikado
+# Stage B: Mikado
 # ---------------------------------------------------------------------------
 
 
@@ -930,7 +930,7 @@ def _run_mikado_stage(
         if config.stringtie_list and not config.protein_db:
             _log.warning(
                 "basic mode: StringTie evidence present but --protein-db not "
-                "supplied — Mikado requires both; skipping Mikado. "
+                "supplied: Mikado requires both; skipping Mikado. "
                 "All Helixer loci become backstop genes (no isoform discovery). "
                 "Supply --protein-db to enable the full reconciliation chain."
             )
@@ -1084,7 +1084,7 @@ def _run_mikado_stage(
             )
         else:
             _log.info(
-                "reuse: skipping prepare/external/transdecoder/diamond/serialise — "
+                "reuse: skipping prepare/external/transdecoder/diamond/serialise, "
                 "reusing Mikado DB + prepared transcripts from %s (re-running pick only)",
                 reuse_dir,
             )
@@ -1107,7 +1107,7 @@ def _run_mikado_stage(
 
 
 def _mikado_output_paths(config: PipelineConfig) -> list[Path]:
-    """The three files ``parse_loci_gff3`` needs — the MIKADO stage's checkpoint."""
+    """The three files ``parse_loci_gff3`` needs: the MIKADO stage's checkpoint."""
     assert config.work_dir is not None  # set by __post_init__
     mik_run = Path(config.work_dir) / "mikado_run"
     return [
@@ -1134,7 +1134,7 @@ def _parse_external_mikado_loci(config: PipelineConfig) -> list["MikadoLocus"]:
     """Parse externally-supplied Mikado loci (``--mikado-loci``).
 
     Auto-detects companion ``*.metrics.tsv`` and ``*.scores.tsv`` next to the GFF3
-    using Mikado's naming convention (``<stem>.metrics.tsv``). Warns if absent —
+    using Mikado's naming convention (``<stem>.metrics.tsv``). Warns if absent,
     they carry combined_score and blast_score but are not strictly required.
     """
     assert config.mikado_loci_gff3 is not None
@@ -1153,13 +1153,13 @@ def _parse_external_mikado_loci(config: PipelineConfig) -> list["MikadoLocus"]:
 
     if metrics_str is None:
         _log.warning(
-            "--mikado-loci: metrics TSV not found (%s) — blast_score and "
+            "--mikado-loci: metrics TSV not found (%s), blast_score and "
             "partial-ORF detection will fall back to heuristics",
             metrics,
         )
     if scores_str is None:
         _log.warning(
-            "--mikado-loci: scores TSV not found (%s) — combined_score will "
+            "--mikado-loci: scores TSV not found (%s), combined_score will "
             "be None for all transcripts",
             scores,
         )
@@ -1223,7 +1223,7 @@ def _emit_junctions_bed(
 
 
 # ---------------------------------------------------------------------------
-# Stage C — per-gene finalisation (Phase 7: backstop CDS, junction fix, gate)
+# Stage C: per-gene finalisation (Phase 7: backstop CDS, junction fix, gate)
 # ---------------------------------------------------------------------------
 
 
@@ -1241,7 +1241,7 @@ def _finalize_one_gene(
     built on the verified structure (a deviation from the phase-spec listing order
     that strictly dominates it: correcting after a CDS is set risks reverting a
     valid junction fix on CDS-containment, leaving the structure unfixed). The
-    per-gene TransDecoder fallback is **not** run here — CDS-less backstop genes
+    per-gene TransDecoder fallback is **not** run here, CDS-less backstop genes
     are rescued in one batched invocation afterward, so this function
     is a pure, picklable, per-gene transform safe to dispatch to a worker.
     """
@@ -1418,7 +1418,7 @@ def _finalize_genes(
         gate_flags = flag_map.get(g.gene_id, [])
         merged = attrs.evolve(g, flags=dedup_flags([*g.flags, *gate_flags]))
         # A homology-backed disabled ORF (premature stop / mod-3
-        # frameshift) becomes a pseudogene candidate — biotype 'pseudogene',
+        # frameshift) becomes a pseudogene candidate, biotype 'pseudogene',
         # PSEUDOGENE_CANDIDATE flag, Tier-1 demotion. Uses the gate flags so the
         # INTERNAL_STOP signal is shared, never recomputed.
         typed = apply_pseudogene_typing(
@@ -1426,7 +1426,7 @@ def _finalize_genes(
         )
         # Assign protein_coding / lncRNA / ncRNA_undetermined from
         # the existing signals (runs AFTER pseudogene typing, which it never
-        # overrides — pseudogene wins for a disabled homolog). Non-coding biotypes
+        # overrides: pseudogene wins for a disabled homolog). Non-coding biotypes
         # get a coherent tier (never Tier 1/2).
         out.append(
             assign_biotype(
@@ -1446,11 +1446,11 @@ def _assign_stringtie_tpm(
 
     Mikado consumes the StringTie TPM only as an external scoring metric and does
     not emit it back, so without this step every reconciled transcript carries
-    ``tpm=None`` and the report's ``frac_genes_tpm_pass`` is always 0 — even with
+    ``tpm=None`` and the report's ``frac_genes_tpm_pass`` is always 0, even with
     valid StringTie input. Here each transcript is assigned the TPM of the
     same-strand StringTie structure with the greatest exonic overlap (the exact
     rule the ``evidence`` scorer uses; shared via
-    :func:`io.stringtie.best_overlapping_tpm`). Sets ``tpm`` only — never changes
+    :func:`io.stringtie.best_overlapping_tpm`). Sets ``tpm`` only, never changes
     structure, CDS, tier, biotype, or the gene set.
     """
     index = inputs.get("tpm_overlap_index") or {}
@@ -1517,7 +1517,7 @@ def _maybe_flag_variants(
     Off unless both ``config.vcf_flag_impact`` and ``config.vcf_path`` are set
     Returns ``genes`` unchanged when disabled, so the default/golden path is
     untouched. When enabled, loads the **decomposed** VCF and attaches
-    ``VARIANT_IMPACTED`` to genes whose CDS overlaps a high-impact variant — flag
+    ``VARIANT_IMPACTED`` to genes whose CDS overlaps a high-impact variant, flag
     only, never re-typing or re-tiering.
     """
     if not config.vcf_flag_impact or not config.vcf_path:
@@ -1545,13 +1545,13 @@ def _maybe_gate_te(
     the default/golden path is untouched (EDTA is the only TE signal). When set,
     flags every TE-overlapping model (``TE_OVERLAP``) and reclassifies good-ORF
     genes whose model-fraction TE overlap is at/above ``te_overlap_threshold`` as
-    ``transposable_element`` — using the EDTA ``Classification`` order, so
+    ``transposable_element``, using the EDTA ``Classification`` order, so
     knob/satellite/low-complexity never gate.
     """
     if not config.te_annotation:
         return genes
     if not Path(config.te_annotation).exists():
-        _log.warning("TE annotation not found: %s — skipping TE gating", config.te_annotation)
+        _log.warning("TE annotation not found: %s, skipping TE gating", config.te_annotation)
         return genes
     from helixforge.reconcile.te import gate_te, parse_edta_te_intervals
 
@@ -1571,7 +1571,7 @@ def _maybe_gate_te(
 
 
 # ---------------------------------------------------------------------------
-# Phase 31 — functional annotation (D1/D2) + genome-level report (D3/D4)
+# Phase 31: functional annotation (D1/D2) + genome-level report (D3/D4)
 # ---------------------------------------------------------------------------
 
 
@@ -1588,7 +1588,7 @@ def _maybe_annotate_function(
     runs InterProScan/eggNOG, and returns ``(genes_with_DOMAIN_COMPLETE_flag,
     functional_records)``. The records feed the GFF3 ``Ontology_term``/``Dbxref``
     emission; the credibility flag is added by ``apply_domain_credibility`` (D2,
-    count-neutral — an INFO flag only).
+    count-neutral, an INFO flag only).
     """
     if not config.functional_annotation:
         return genes, {}
@@ -1643,7 +1643,7 @@ def _maybe_trace_reorder(
     **Reorder-only and count-neutral**: it permutes + renumbers a gene's
     transcripts (changing ``.N`` ids, ``is_primary``, ``primary_transcript_id``,
     and ``trace_rank``) but keeps the gene's ``as_events`` and ``flags`` exactly as
-    derived during reconciliation — so the gene / tier / origin / AS-event set are
+    derived during reconciliation, so the gene / tier / origin / AS-event set are
     unchanged (the golden gate for the TRaCE-on variant). Functional records,
     keyed by transcript id, are re-keyed onto the new ids so the GFF3
     ``Ontology_term``/``Dbxref`` still attach to the right isoform.
@@ -1768,7 +1768,7 @@ def _maybe_write_report(
 
 
 # ---------------------------------------------------------------------------
-# Stage D — output
+# Stage D: output
 # ---------------------------------------------------------------------------
 
 
@@ -1908,7 +1908,7 @@ def _write_report(genes: list[ReconciledGene], report_path: str) -> None:
                 _fmt(p.junction_support_fraction),
                 _fmt(p.confidence),  # helixer_support (None unless enriched)
                 _fmt(p.combined_score),
-                "",  # aed — computed in Phase 9 stats
+                "",  # aed, computed in Phase 9 stats
                 ",".join(f.name for f in g.flags),
             ]
             fh.write("\t".join(_fmt(v) for v in row) + "\n")
@@ -1939,13 +1939,13 @@ def run_pipeline(config: PipelineConfig) -> list[ReconciledGene]:
     workdir_errors = check_work_dir(config)
     if workdir_errors:
         raise RuntimeError(
-            "work-dir preflight failed — fix before running:\n  "
+            "work-dir preflight failed: fix before running:\n  "
             + "\n  ".join(workdir_errors)
         )
     tool_errors = check_tool_chain(config)
     if tool_errors:
         raise FileNotFoundError(
-            "tool-chain preflight failed — install missing tools:\n  "
+            "tool-chain preflight failed: install missing tools:\n  "
             + "\n  ".join(tool_errors)
         )
 
@@ -1995,7 +1995,7 @@ def run_pipeline(config: PipelineConfig) -> list[ReconciledGene]:
         # 3. Fresh run: PREP → MIKADO → parse.
         #
         # Basic mode (no StringTie + protein_db) produces no loci files and
-        # is never checkpointed — path 3 always applies.
+        # is never checkpointed: path 3 always applies.
         if config.mikado_loci_gff3:
             _log.info(
                 "--mikado-loci: skipping PREP + MIKADO, using external loci"
@@ -2009,7 +2009,7 @@ def run_pipeline(config: PipelineConfig) -> list[ReconciledGene]:
                 and checkpoint.is_complete("MIKADO", mikado_outputs)
             ):
                 _log.info(
-                    "[MIKADO] resume: checkpoint valid — skipping external chain"
+                    "[MIKADO] resume: checkpoint valid, skipping external chain"
                 )
                 mikado_loci = _reparse_mikado_loci(config)
             else:
@@ -2051,7 +2051,7 @@ def run_pipeline(config: PipelineConfig) -> list[ReconciledGene]:
             _save_id_map(config.id_map_path, id_map)
             genes = _finalize_genes(genes, config, inputs, stats=stats)
             # Attach per-transcript StringTie TPM by exonic overlap (the metric
-            # Mikado never emits back). Count-neutral — sets tpm only.
+            # Mikado never emits back). Count-neutral, sets tpm only.
             genes = _assign_stringtie_tpm(genes, inputs)
             genes = _maybe_add_structured_ncrna(genes, config)
             genes = _maybe_flag_variants(genes, config)
@@ -2065,7 +2065,7 @@ def run_pipeline(config: PipelineConfig) -> list[ReconciledGene]:
         # TRaCE canonical-transcript election (off by default → no-op).
         # Runs after isoforms + any functional domains exist so the domain voter
         # can use per-isoform coverage when available; re-keys the functional
-        # records onto the elected ids. Reorder-only — counts/tiers/AS unchanged.
+        # records onto the elected ids. Reorder-only, counts/tiers/AS unchanged.
         genes, functional = _maybe_trace_reorder(genes, config, inputs, functional)
 
         with _Timer("OUTPUT"):
@@ -2081,7 +2081,7 @@ def run_pipeline(config: PipelineConfig) -> list[ReconciledGene]:
                 and not functional
                 and checkpoint.is_complete("OUTPUT", output_files)
             ):
-                _log.info("[OUTPUT] resume: checkpoint valid — outputs already written")
+                _log.info("[OUTPUT] resume: checkpoint valid, outputs already written")
             else:
                 _write_outputs(genes, config, functional=functional or None)
                 _write_report(genes, config.report_path)

@@ -18,7 +18,7 @@ _TIERS = (1, 2, 3)
 
 @dataclass
 class AggregateResult:
-    """Outcome of :func:`aggregate` — merged paths + genome-level tallies."""
+    """Outcome of :func:`aggregate`, merged paths + genome-level tallies."""
 
     gff3_path: Path
     tier_paths: dict[int, Path]
@@ -55,7 +55,7 @@ def _read_gene_blocks(path: Path | str) -> list[tuple[tuple[str, int], str, str]
     with open(path) as fh:
         for line in fh:
             stripped = line.rstrip("\n")
-            if stripped == "###":  # record separator — check BEFORE "##" skip
+            if stripped == "###":  # record separator, check BEFORE "##" skip
                 if current:
                     blocks.append(_finalize_block(current, path))
                     current = []
@@ -87,7 +87,7 @@ def _finalize_block(
             start = gff3_to_internal(int(cols[3]), int(cols[4]))[0]
             gene_id = _gene_id_from_attrs(cols[8])
             break
-    if seqid is None:  # no gene line — fall back to the first feature
+    if seqid is None:  # no gene line, fall back to the first feature
         cols = lines[0].rstrip("\n").split("\t")
         seqid = cols[0]
         start = gff3_to_internal(int(cols[3]), int(cols[4]))[0]
@@ -128,7 +128,7 @@ def _merge_gff3_files(paths: list[str], out_path: Path | str) -> list[str]:
         if gene_id in seen:
             raise ValueError(
                 f"duplicate gene id across chunks: {gene_id!r} appears in "
-                f"{seen[gene_id]} and again while merging — HFG ranges overlapped"
+                f"{seen[gene_id]} and again while merging, HFG ranges overlapped"
             )
         seen[gene_id] = out_path
         # Global transcript-id uniqueness: two chunks must never emit the same
@@ -136,7 +136,7 @@ def _merge_gff3_files(paths: list[str], out_path: Path | str) -> list[str]:
         for tid in _transcript_ids(text):
             if tid in seen_tx:
                 raise ValueError(
-                    f"duplicate transcript id across chunks: {tid!r} — "
+                    f"duplicate transcript id across chunks: {tid!r}, "
                     "HFG ranges overlapped"
                 )
             seen_tx.add(tid)
@@ -161,14 +161,14 @@ def prefixes_from_pattern(input_dir: str | Path, pattern: str) -> list[str]:
 
     Matches ``<input_dir>/<pattern>`` (expected to hit the per-chunk GFF3s), then
     derives each chunk's output **prefix** by stripping the ``.gff3`` suffix and an
-    optional ``.tier{1,2,3}`` segment — so ``*.gff3`` matching both
+    optional ``.tier{1,2,3}`` segment, so ``*.gff3`` matching both
     ``chunk_0000.gff3`` and ``chunk_0000.tier1.gff3`` collapses to the single
     prefix ``chunk_0000``. Returns sorted, de-duplicated prefixes (full paths).
     """
     matches = sorted(Path(input_dir).glob(pattern))
     if not matches:
         raise FileNotFoundError(
-            f"no files match {pattern!r} in {input_dir} — point --input-dir at the "
+            f"no files match {pattern!r} in {input_dir}: point --input-dir at the "
             "per-chunk outputs and --pattern at their .gff3 files"
         )
     prefixes: list[str] = []
@@ -189,7 +189,7 @@ def prefixes_from_pattern(input_dir: str | Path, pattern: str) -> list[str]:
     if not prefixes:
         raise FileNotFoundError(
             f"pattern {pattern!r} matched files in {input_dir} but none ended in "
-            ".gff3 — aggregate needs the per-chunk .gff3 outputs"
+            ".gff3, aggregate needs the per-chunk .gff3 outputs"
         )
     return sorted(prefixes)
 
@@ -265,12 +265,12 @@ def _union_id_maps(paths: list[str]) -> dict[str, str]:
             if locus_id in key_owner and key_owner[locus_id] != str(path):
                 raise ValueError(
                     f"Helixer locus {locus_id!r} covered by >1 chunk "
-                    f"({key_owner[locus_id]} and {path}) — partition split a gene"
+                    f"({key_owner[locus_id]} and {path}), partition split a gene"
                 )
             if hfg in value_owner and value_owner[hfg] != str(path):
                 raise ValueError(
                     f"HFG {hfg!r} allocated in two chunks "
-                    f"({value_owner[hfg]} and {path}) — reserved ranges overlapped"
+                    f"({value_owner[hfg]} and {path}), reserved ranges overlapped"
                 )
             key_owner[locus_id] = str(path)
             value_owner[hfg] = str(path)
@@ -290,7 +290,7 @@ def _fold_into_master(
         if locus_id in master and master[locus_id] != hfg:
             raise ValueError(
                 f"id_map conflict for {locus_id!r}: master has {master[locus_id]!r} "
-                f"but chunk assigned {hfg!r} — id stability violated"
+                f"but chunk assigned {hfg!r}: id stability violated"
             )
         master[locus_id] = hfg
     if master_id_map_path:
@@ -347,7 +347,7 @@ def aggregate(
 
     if num_rows != len(gene_ids):
         raise ValueError(
-            f"report rows ({num_rows}) != merged genes ({len(gene_ids)}) — "
+            f"report rows ({num_rows}) != merged genes ({len(gene_ids)}), "
             "a chunk's GFF3 and report disagree"
         )
 

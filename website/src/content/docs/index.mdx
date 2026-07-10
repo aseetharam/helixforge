@@ -1,0 +1,97 @@
+---
+title: HelixForge
+description: Evidence-based refinement of deep-learning gene annotations. Helixer is the backbone; RNA-seq and protein evidence refine a model only when they outscore it.
+template: splash
+hero:
+  tagline: Isoform-aware refinement of Helixer annotations via Mikado reconciliation. The predictor is the backbone; evidence refines a model only where it demonstrably improves it.
+  actions:
+    - text: Maize tutorial
+      link: /tutorial/inputs/
+      icon: right-arrow
+      variant: primary
+    - text: Install
+      link: /installation/
+      icon: download
+      variant: secondary
+    - text: CLI reference
+      link: /cli/
+      icon: open-book
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+[Helixer](https://github.com/weberlab-hhu/Helixer) is a deep-learning *ab initio* gene
+finder that works across species without retraining, but it emits exactly one transcript
+per gene and carries no evidence support. **HelixForge keeps that gene set as a stable
+anchor**, reconciles it against RNA-seq assemblies, splice junctions, and protein
+alignments through [Mikado](https://github.com/EI-CoreBioinformatics/mikado), and writes a
+tiered, isoform-aware, ID-stable annotation.
+
+## The reconciliation principle
+
+> The predictor is the backbone. Evidence refines a model only where it demonstrably
+> improves it, and nothing the predictor gets right is discarded.
+
+RNA-seq and protein evidence are **scored** against each Helixer model; a model changes
+only when the evidence **outscores** the original. That single rule is what separates
+HelixForge from a replace-everything re-annotation.
+
+<CardGrid>
+  <Card title="Reconciles, does not replace" icon="approve-check">
+    Evidence is scored against each Helixer model; a model changes only when the evidence
+    outscores the original.
+  </Card>
+  <Card title="Adds the missing isoforms" icon="add-document">
+    Helixer is structurally capped at one transcript per gene. HelixForge reconstructs
+    alternatives where transcript evidence supports them.
+  </Card>
+  <Card title="Uses the predictor's confidence" icon="star">
+    Helixer per-base confidence is injected as an external metric, targeting correction
+    where the predictor is least certain.
+  </Card>
+  <Card title="Rescues silent genes" icon="heart">
+    Predicted genes without RNA-seq support are preserved when they carry a valid ORF, so
+    recall is not traded for precision.
+  </Card>
+  <Card title="Tiered output" icon="list-format">
+    Every gene is labeled by evidence tier, so downstream users filter by confidence
+    rather than trusting a flat annotation.
+  </Card>
+  <Card title="Scales without retraining" icon="rocket">
+    No species-specific training, no manual curation. Scales across HPC via genome
+    chunking.
+  </Card>
+</CardGrid>
+
+## How it works
+
+The pipeline runs in four stages, **prep** (evidence preparation), **Mikado**
+(reconciliation engine), **reconcile** (model selection, backstop rescue, tiering), and
+**output** (validated GFF3 plus reports):
+
+```text
+Helixer prediction  ─┐
+  + per-base confidence
+                     │
+RNA-seq              ├──▶  Mikado-anchored reconciliation  ──▶  tiered, isoform-aware
+  StringTie + junctions                                          evidence-backed GFF3
+                     │     score before modifying
+Protein homology     ┘     keep a change only if it outscores
+  miniprot alignments      call isoforms where evidence supports
+                           confidence-gated splice correction
+                           rescue silent genes with valid ORFs
+```
+
+All CDS are stop-inclusive, following the Helixer and Ensembl convention. A gene whose CDS
+cannot be made structurally coherent is flagged and emitted without a CDS rather than
+repaired heuristically.
+
+## Start here
+
+<CardGrid>
+  <LinkCard title="Install HelixForge" href="/installation/" description="pip + extras, the external-tool list, and the doctor preflight." />
+  <LinkCard title="Maize (B73) tutorial" href="/tutorial/inputs/" description="A complete end-to-end walkthrough in the order data actually flows." />
+  <LinkCard title="CLI reference" href="/cli/" description="Every command and subcommand, generated from the live CLI." />
+  <LinkCard title="Benchmarks" href="/benchmarks/" description="Maize B73 vs the NAM v5 reference annotation." />
+</CardGrid>

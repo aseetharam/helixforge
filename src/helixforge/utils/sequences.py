@@ -106,7 +106,7 @@ STANDARD_STOP_CODONS = ("TAA", "TAG", "TGA")
 # --- NCBI alternative translation tables ---
 # Each table is expressed as the set of amino-acid reassignments relative to
 # table 1 (the standard code); ``_build_table`` applies them. Only tables a
-# plant pipeline plausibly needs for organellar contigs are provided — extend
+# plant pipeline plausibly needs for organellar contigs are provided, extend
 # this map to add more. Start-codon variation is intentionally NOT encoded
 # Start codons stay ATG by default; the start check is conservative.
 # ``DEFAULT_TRANSL_TABLE`` is sourced from helixforge.constants (the single knob).
@@ -204,7 +204,7 @@ def translate(
 
     Trailing 1–2 nt that do not form a full codon are ignored. Stop codons
     translate to ``'*'``. Any codon containing an ``N``/IUPAC ambiguous base
-    (or otherwise absent from the chosen table) translates to ``'X'`` — never an
+    (or otherwise absent from the chosen table) translates to ``'X'``, never an
     exception. ``transl_table`` selects the NCBI genetic code.
     """
     if phase not in (0, 1, 2):
@@ -246,7 +246,7 @@ def check_internal_stops(
     A premature (internal) stop indicates a broken ORF.
     Positions are 0-based indices into ``seq`` of the stop codon's first base.
     An ``N``/IUPAC codon translates to ``'X'`` and is treated as "unknown," not a
-    premature stop — never raises on ambiguity.
+    premature stop, never raises on ambiguity.
     """
     table = get_codon_table(transl_table)
     s = _clean(seq)

@@ -1,4 +1,4 @@
-"""External-scores emitter — the Helixer prior."""
+"""External-scores emitter: the Helixer prior."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def _introns_from_pairs(pairs: list[tuple[int, int]]) -> list[tuple[int, int]]:
 # via get_exon_confidence, one per intron via get_intron_score, plus a full-span
 # get_region_confidence that re-reads the locus). Here we fetch the transcript's
 # full ``[min_exon_start, max_exon_end)`` prediction block **once** and compute
-# every metric by numpy-slicing that in-memory array — collapsing it to one
+# every metric by numpy-slicing that in-memory array: collapsing it to one
 # h5py read per transcript. This is the *same arithmetic over the same bytes*
 # reorganized: a sliced view of the big block at ``[s-block_start, e-block_start)``
 # is element-identical to ``get_per_base_predictions(seqid, s, e)`` (the reader's
@@ -101,7 +101,7 @@ def _score_components(
     # One read for the whole transcript span; every metric slices this in-memory.
     block = h5_reader.get_per_base_predictions(seqid, block_start, block_end)
 
-    # (i) exon-length-weighted mean of max(CDS, UTR) — passed exon order.
+    # (i) exon-length-weighted mean of max(CDS, UTR), passed exon order.
     total_len = 0
     weighted = 0.0
     for s, e in pairs:
@@ -220,7 +220,7 @@ def write_external_scores_tsv(
 ) -> Path:
     """Write the external-scores TSV (``tid`` + metric columns); return ``Path``.
 
-    ``rows`` is ``{tid: {metric: value}}``. Every value must be in [0, 1] — a
+    ``rows`` is ``{tid: {metric: value}}``. Every value must be in [0, 1], a
     violation raises ``ValueError`` (Mikado rejects out-of-range external
     metrics; we never silently clamp here). All rows must share the same metric
     keys.

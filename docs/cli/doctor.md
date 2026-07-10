@@ -2,7 +2,7 @@
 
 Preflight: validate inputs + resolve external tools before a run.
 
-The single input-validation entry point — run it before a real
+The single input-validation entry point, run it before a real
 ``reconcile``. With no inputs it resolves and versions every external tool
 the pipeline shells out to (mikado, diamond, transdecoder, portcullis, …)
 and checks environment hygiene (console-script shim, CRAM reference). Given
@@ -12,7 +12,7 @@ format sniffing, and BAM/CRAM index (CSI) presence. ``--check-config``
 verifies an emitted Mikado config/scoring file against the detected Mikado
 version.
 
-Nothing is modified and nothing is annotated — this command only inspects.
+Nothing is modified and nothing is annotated, this command only inspects.
 It exits non-zero if a required tool is missing, an emitted config fails
 schema verification, or the input-integrity gate fails.
 
@@ -37,7 +37,7 @@ Reports (printed to the console; advisory checks warn, gates fail):
 | `--bam` | RNA-seq BAM (repeatable). (repeatable) |
 | `--star-sj` | STAR SJ.out.tab (repeatable). (repeatable) |
 | `--miniprot` | miniprot GFF (integrity check). |
-| `--reference` | Genome FASTA for CRAM decode — doctor reports whether CRAM BAM inputs have an offline reference (--reference or REF_CACHE). |
+| `--reference` | Genome FASTA for CRAM decode, doctor reports whether CRAM BAM inputs have an offline reference (--reference or REF_CACHE). |
 | `--seqid-aliases` | Seqid alias map (JSON {alias: canonical} or 2-col TSV). |
 
 ## Examples

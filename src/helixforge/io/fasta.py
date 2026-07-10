@@ -56,7 +56,7 @@ class GenomeAccessor:
         """Return uppercase sequence for ``[start, end)``; RC if ``strand == '-'``.
 
         Coordinates are 0-based half-open and always low→high. Strand only
-        controls reverse-complement — it never changes the coordinates.
+        controls reverse-complement, it never changes the coordinates.
         """
         if seqid not in self._fasta:  # type: ignore[operator]  # pyfaidx lacks stubs
             raise KeyError(f"unknown seqid: {seqid!r}")

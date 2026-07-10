@@ -49,9 +49,9 @@ _STAR_MOTIF_CANONICAL: dict[str, str] = {
 }
 
 # Junction-strand sourcing policy:
-#   "xs"            — strand from the XS tag only; drop reads without XS (legacy).
-#   "motif"         — strand from the canonical splice motif only (needs a genome).
-#   "xs_then_motif" — XS when present, else infer from the motif (default). With
+#   "xs", strand from the XS tag only; drop reads without XS (legacy).
+#   "motif", strand from the canonical splice motif only (needs a genome).
+#   "xs_then_motif", XS when present, else infer from the motif (default). With
 #                     no genome supplied this degrades to legacy "xs" behaviour.
 STRAND_SOURCES = frozenset({"xs", "motif", "xs_then_motif"})
 DEFAULT_STRAND_SOURCE = "xs_then_motif"
@@ -62,7 +62,7 @@ def classify_splice_motif(donor_dinuc: str, acceptor_dinuc: str, strand: str) ->
 
     ``donor_dinuc`` is the genomic-forward sequence at ``[donor, donor + 2)``
     (the intron's low-coordinate end) and ``acceptor_dinuc`` is ``[acceptor - 2,
-    acceptor)`` (the high-coordinate end) — both read on the **forward** genomic
+    acceptor)`` (the high-coordinate end), both read on the **forward** genomic
     strand regardless of ``strand``. The classification is strand-aware: on the
     minus strand the coding-orientation donor/acceptor are the reverse
     complements of the genomic acceptor/donor. Returns one of ``'GT-AG'``,
@@ -93,7 +93,7 @@ def infer_strand_from_motif(donor_dinuc: str, acceptor_dinuc: str) -> str | None
     A canonical motif read in the forward orientation implies ``'+'``; one
     canonical only when read in the reverse orientation implies ``'-'``. Returns
     ``None`` when the motif is non-canonical in both orientations (cannot orient
-    — the caller then drops the junction unless XS provides the strand).
+the caller then drops the junction unless XS provides the strand).
     """
     if (
         classify_splice_motif(donor_dinuc, acceptor_dinuc, "+")
@@ -111,7 +111,7 @@ def infer_strand_from_motif(donor_dinuc: str, acceptor_dinuc: str) -> str | None
 # A .bai index uses 16-bit (R-tree) bins capped at 2^29 - 1 bp; any contig
 # longer than 2^29 bp cannot be addressed by .bai and a pysam fetch over it
 # *silently returns nothing*. Wheat/barley/maize
-# chromosomes exceed this — the .csi index is mandatory for them.
+# chromosomes exceed this: the .csi index is mandatory for them.
 CSI_REQUIRED_THRESHOLD = 2**29  # 536_870_912 bp (~512 Mb)
 
 
@@ -134,8 +134,8 @@ def _has_csi_index(bam_path: str) -> bool:
 # --- CRAM support -----------------------------------------------------------
 # CRAM is BAM's reference-compressed sibling: alignments store only the diff
 # against the genome, so the FASTA must be supplied (``reference_filename``) to
-# decode them. We accept it transparently — detected by extension or the 4-byte
-# ``CRAM`` magic — so junctions/coverage work on a CRAM exactly as on a BAM.
+# decode them. We accept it transparently, detected by extension or the 4-byte
+# ``CRAM`` magic, so junctions/coverage work on a CRAM exactly as on a BAM.
 
 
 def _is_cram(path: str | os.PathLike[str]) -> bool:
@@ -178,7 +178,7 @@ def _pileup_kwargs(handle: pysam.AlignmentFile) -> dict[str, Any]:
     """Extra ``pileup()`` kwargs that depend on the file type.
 
     ``AlignmentFile.pileup`` defaults ``multiple_iterators=True``, which htslib
-    does **not** implement for CRAM — pysam then emits a ``UserWarning`` and
+    does **not** implement for CRAM, pysam then emits a ``UserWarning`` and
     silently falls back to a single iterator. We pre-empt that for CRAM by
     passing ``multiple_iterators=False`` explicitly (the same effective
     behaviour, no warning). A BAM is left untouched so its pileup semantics are
@@ -193,7 +193,7 @@ def require_csi_for_large_contigs(bam_path: str, handle: pysam.AlignmentFile) ->
     """Raise if ``handle`` has a contig > 2^29 bp but only a ``.bai`` index.
 
     A ``.bai`` cannot address coordinates beyond 2^29 bp, so pysam fetch over
-    such a contig silently returns nothing — a catastrophic, silent evidence
+    such a contig silently returns nothing, a catastrophic, silent evidence
     loss on the largest plant chromosomes. When a
     large contig is present a ``.csi`` index is required.
 
@@ -207,12 +207,12 @@ def require_csi_for_large_contigs(bam_path: str, handle: pysam.AlignmentFile) ->
         refs = list(handle.references or ())
         lengths = list(handle.lengths or ())
     except (ValueError, OSError):
-        return  # no @SQ dictionary (check_sq=False) — nothing to enforce here
+        return  # no @SQ dictionary (check_sq=False), nothing to enforce here
     big = [r for r, ln in zip(refs, lengths) if ln > CSI_REQUIRED_THRESHOLD]
     if big and not _has_csi_index(bam_path):
         raise FormatError(
             f"BAM has contig(s) > 2^29 bp ({', '.join(big[:3])}"
-            f"{'…' if len(big) > 3 else ''}) but no .csi index — a .bai cannot "
+            f"{'…' if len(big) > 3 else ''}) but no .csi index, a .bai cannot "
             "address these coordinates (pysam fetch would silently return "
             "nothing). Re-index with `samtools index -c`.",
             path=bam_path,
@@ -233,7 +233,7 @@ def bam_mapping_stats(
     ``reference_filename``.
 
     Returns ``{mapped, unmapped, total, mapping_rate}`` where ``mapping_rate`` =
-    ``mapped / total`` (0.0 when empty — no div-by-zero). Requires an
+    ``mapped / total`` (0.0 when empty, no div-by-zero). Requires an
     index; raises ``FileNotFoundError`` for a missing file and ``ValueError`` for
     a missing index, mirroring :class:`JunctionExtractor`.
     """
@@ -374,11 +374,11 @@ class JunctionExtractor:
 
         Strand sourcing follows ``strand_source``:
 
-        * ``"xs"`` — strand from the XS tag only; a read without XS is dropped.
-        * ``"motif"`` — strand inferred from the canonical splice motif read off
+        * ``"xs"``, strand from the XS tag only; a read without XS is dropped.
+        * ``"motif"``, strand inferred from the canonical splice motif read off
           ``genome`` (a :class:`~helixforge.io.fasta.GenomeAccessor`); dropped
           when the motif is non-canonical or no genome is given.
-        * ``"xs_then_motif"`` (default) — XS when present, otherwise the motif.
+        * ``"xs_then_motif"`` (default), XS when present, otherwise the motif.
           **With no genome supplied this is identical to legacy ``"xs"``**, so
           existing call sites are byte-for-byte unchanged.
 
@@ -655,7 +655,7 @@ class CoverageCalculator:
         QC-fail / **duplicate** reads, and ``max_depth`` is set **explicitly**
         (default :data:`~helixforge.constants.COVERAGE_MAX_DEPTH`) so a deep
         pileup is no longer silently capped at htslib's ~8000 default. Reads
-        below ``min_mapq`` are excluded (default 0 = count every primary read —
+        below ``min_mapq`` are excluded (default 0 = count every primary read,
         the legacy behaviour; pass ``min_mapq=UNIQUE_MIN_MAPQ`` for unique-only
         coverage, consistent with junction extraction).
         """
@@ -686,7 +686,7 @@ class CoverageCalculator:
                         and p.alignment.mapping_quality >= min_mapq
                     )
             return depth
-        # bigwig — precomputed signal, no per-read MAPQ/depth notion.
+        # bigwig: precomputed signal, no per-read MAPQ/depth notion.
         import math
 
         vals = self._handle.values(seqid, start, end)
@@ -707,7 +707,7 @@ class CoverageCalculator:
         coalesced by :func:`_merge_intervals`) instead of one pileup per region.
         Because a base's pileup depth does not depend on the query window, slicing
         a span's depth to a contained region is identical to querying that region
-        directly — so this is byte-for-byte the old path, just with the per-exon
+        directly, so this is byte-for-byte the old path, just with the per-exon
         indexed seeks collapsed to one per gene locus.
 
         The reason ``--threads`` did nothing on the old per-exon path was twofold:
@@ -732,7 +732,7 @@ class CoverageCalculator:
             spans = _merge_intervals(uniq)
             # One pileup per merged span (reusing the exact per-region counting),
             # then a single sorted walk assigns each region to its containing span
-            # (both lists ascending) — O(n), not O(spans x regions).
+            # (both lists ascending), O(n), not O(spans x regions).
             depths = [
                 np.asarray(
                     self.region_coverage_array(
@@ -764,7 +764,7 @@ class CoverageCalculator:
         ``all_depth`` counts every primary read (``min_mapq=0``); ``unique_depth``
         counts only reads with ``mapping_quality >= unique_min_mapq``. Reporting
         both lets a caller judge paralog/polyploid (multi-mapper-inflated)
-        regions — where the two diverge — cheaply.
+        regions, where the two diverge, cheaply.
         For a bigWig source both arrays are identical (no per-read MAPQ).
         """
         if end <= start:
@@ -813,9 +813,9 @@ class CoverageCalculator:
 
         Assembly gaps (reference ``N`` runs) carry depth 0 by construction, so a
         gene spanning a draft-scaffold gap is biased toward LOW/SILENT
-        When the reference ``N``-mask is supplied — either a
+        When the reference ``N``-mask is supplied, either a
         ``genome`` accessor exposing ``get_sequence(seqid, start, end, '+')`` or
-        an explicit ``n_mask`` (one bool per base, ``True`` = reference ``N``) —
+        an explicit ``n_mask`` (one bool per base, ``True`` = reference ``N``),
         those positions are excluded from the **denominator**, so the mean is
         taken over non-``N`` (mappable) bases only. With no mask the behaviour is
         byte-identical to before (mean over the whole region).
@@ -931,7 +931,7 @@ class CoveragePool:
     (100 K loci × 10 BAMs ⇒ 1 M opens). This context manager opens one
     :class:`CoverageCalculator` per source on ``__enter__`` and closes them all
     deterministically on ``__exit__``; callers query the held handles per locus.
-    Mean values are unchanged — only the open/close lifecycle moves.
+    Mean values are unchanged, only the open/close lifecycle moves.
 
     ``calculator_cls`` is injectable so a caller (and the unit tests) can supply a
     fake; it defaults to :class:`CoverageCalculator`. Handles are managed via the
@@ -991,7 +991,7 @@ def parse_star_sj_tab(
     thresholds are excluded.
 
     The **motif column (col 4)** is no longer
-    discarded — it is mapped to the canonical class and carried on each
+    discarded, it is mapped to the canonical class and carried on each
     junction's ``canonical`` field, and the **multi-map column (col 7)** is
     carried on ``multimap_reads``. When ``genome`` (a
     :class:`~helixforge.io.fasta.GenomeAccessor`) is supplied the genome-derived
@@ -1036,7 +1036,7 @@ def parse_star_sj_tab(
                 )
             strand = strand_map.get(strand_code)
             if strand is None:
-                continue  # undefined strand (code 0) — preserved skip
+                continue  # undefined strand (code 0), preserved skip
             if unique_reads < min_unique_reads or overhang < min_overhang:
                 continue
 
@@ -1050,7 +1050,7 @@ def parse_star_sj_tab(
                     if canonical is not None and geno != canonical:
                         _log.warning(
                             "STAR/genome splice-motif disagreement at %s:%d-%d "
-                            "(%s): STAR=%s genome=%s — using genome",
+                            "(%s): STAR=%s genome=%s, using genome",
                             chrom,
                             donor,
                             acceptor,

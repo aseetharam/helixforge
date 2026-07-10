@@ -115,7 +115,7 @@ def _run_cmd(
     ``retries``: a bounded retry-with-backoff for the **idempotent** Mikado-chain
     externals (only DIAMOND opts in via :func:`run_diamond`). Default 0 ⇒ one
     attempt. **Never** pass ``retries`` for the non-idempotent ``serialise`` DB
-    insertion — rely on checkpointing.
+    insertion, rely on checkpointing.
     """
     argv_str = [str(a) for a in argv]
 
@@ -192,7 +192,7 @@ def run_transdecoder(
     intermediate checkpoint dir), so both steps run with ``cwd=out_dir`` to keep
     everything self-contained and make the returned path correct.
 
-    All paths are resolved to absolute before being passed to the subprocess —
+    All paths are resolved to absolute before being passed to the subprocess,
     a relative ``--output_dir`` combined with ``cwd=out_dir`` caused
     TransDecoder to nest the path and fail its mkdir.
     """
@@ -404,8 +404,8 @@ def run_mikado(
     run): when ``True``, any step whose expected output already exists under
     ``out_dir`` is reused as-is and its external tool is never invoked; when
     ``False`` (default) the full chain runs. Each external tool's binary is
-    resolved (and a precise error raised if missing) immediately before — and
-    only when — that step actually runs.
+    resolved (and a precise error raised if missing) immediately before, and
+    only when, that step actually runs.
     """
     out_dir = Path(out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)

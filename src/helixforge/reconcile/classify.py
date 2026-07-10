@@ -157,7 +157,7 @@ def _classify_by_coverage(
     """Classify via weighted exonic coverage; bigWig is preferred over BAM.
 
     ``pool`` is the pass-scoped :class:`~helixforge.io.bam.CoveragePool` of already
-    open coverage handles — no per-locus open happens here.
+    open coverage handles, no per-locus open happens here.
     """
     if pool.bigwig_paths:
         calculators, evidence = pool.calculators("bigwig"), "bigwig"

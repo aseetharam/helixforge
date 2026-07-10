@@ -1,4 +1,4 @@
-"""End-to-end benchmark driver — the M7 validation harness."""
+"""End-to-end benchmark driver: the M7 validation harness."""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def write_benchmark_md(
     before_after: pd.DataFrame | None = None,
     benchmark: pd.DataFrame | None = None,
     ablation: pd.DataFrame | None = None,
-    title: str = "HelixForge v3 — Araport11 benchmark",
+    title: str = "HelixForge v3, Araport11 benchmark",
     notes: str | None = None,
 ) -> str:
     """Render the benchmark doc from the (optional) result tables.
@@ -94,7 +94,7 @@ def write_benchmark_md(
     parts.append("")
 
     parts += [
-        "## Ablations (§11 — Helixer-coupling levers)",
+        "## Ablations (§11, Helixer-coupling levers)",
         "",
         "The `no_helixer_support` row vs `full` isolates the project's novel "
         "contribution (the Helixer↔evidence external metric).",

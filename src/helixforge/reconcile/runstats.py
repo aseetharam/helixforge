@@ -34,8 +34,8 @@ class RunStats:
     # Biotype tally (None bucketed as "none").
     biotype_counts: dict[str, int] = field(default_factory=dict)
 
-    # The decision counters summed by :meth:`merge` (the derived tallies —
-    # ``partial_orfs`` / ``tier_counts`` / ``origin_counts`` — are recomputed from
+    # The decision counters summed by :meth:`merge` (the derived tallies,
+    # ``partial_orfs`` / ``tier_counts`` / ``origin_counts``, are recomputed from
     # the final gene set via ``populate_from_genes``, never merged).
     _DECISION_COUNTERS = (
         "merges_accepted",
@@ -68,7 +68,7 @@ class RunStats:
     def populate_from_genes(self, genes: list[ReconciledGene]) -> None:
         """Fill the derived tallies (tier / origin / partial-ORF) from ``genes``.
 
-        Idempotent given a fixed gene set — recomputes the derived counters from
+        Idempotent given a fixed gene set, recomputes the derived counters from
         scratch each call, so it never double-counts when re-invoked.
         """
         from helixforge.qc.flags import PARTIAL_ORF

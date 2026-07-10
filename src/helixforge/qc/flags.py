@@ -1,4 +1,4 @@
-"""QC flag registry — the single source of truth for flag constants."""
+"""QC flag registry: the single source of truth for flag constants."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ PUTATIVE_CODING = _register(
         "PUTATIVE_CODING",
         "evidence",
         "INFO",
-        "Protein-coding on the strength of the model's own complete ORF alone — "
+        "Protein-coding on the strength of the model's own complete ORF alone, "
         "no RNA-seq expression and no protein homology corroborate it. The coding "
         "call stands (absence of corroboration is neutral, not a non-coding "
         "signal); this flag marks it as putative rather than well-supported.",
@@ -111,7 +111,7 @@ AMBIGUOUS_CODON = _register(
         "structure",
         "INFO",
         "A start/stop codon overlaps an N/IUPAC ambiguous base; the codon is "
-        "indeterminate (neither confirmed nor rejected) — emitted instead of "
+        "indeterminate (neither confirmed nor rejected), emitted instead of "
         "NO_START/NO_STOP.",
     )
 )
@@ -185,7 +185,7 @@ DOMAIN_COMPLETE = _register(
         "homology",
         "INFO",
         "The primary ORF spans a complete recognized protein domain (Pfam/InterPro "
-        "via the functional-annotation hook) — a soft ORF-credibility signal "
+        "via the functional-annotation hook), a soft ORF-credibility signal "
         "stronger than a bare ORF of equal length. Opt-in: emitted "
         "only when functional annotation ran.",
     )
@@ -283,7 +283,7 @@ PSEUDOGENE_CANDIDATE = _register(
         "locus",
         "WARNING",
         "Homology-backed CDS carries a disabling lesion (premature stop / mod-3 "
-        "frameshift) — a processed/unitary pseudogene candidate, not a failed "
+        "frameshift), a processed/unitary pseudogene candidate, not a failed "
         "coding gene. Gene biotype is set to 'pseudogene' and the "
         "gene is demoted out of Tier 1.",
     )
@@ -297,7 +297,7 @@ TE_OVERLAP = _register(
         "locus",
         "INFO",
         "The model overlaps a transposable-element feature from an optional EDTA "
-        "TE annotation (only configured TE classes count — satellites/knobs/"
+        "TE annotation (only configured TE classes count, satellites/knobs/"
         "low-complexity are excluded). Flag only: emitted whenever any TE overlap "
         "occurs, independent of whether the overlap is large enough to reclassify "
         "the gene as a transposable element.",

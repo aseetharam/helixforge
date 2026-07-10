@@ -5,13 +5,13 @@ Inspect (read-only): score genes against the Helixer HDF5 confidence track.
 A standalone, HDF5-only scorer: it reads the Helixer softmax predictions and
 computes multi-factor confidence metrics per gene (class probabilities,
 Shannon entropy, boundary sharpness, CDS coding consistency, per-exon
-scores). It needs *only* the Helixer HDF5 + a GFF3 — no Mikado, no RNA-seq,
+scores). It needs *only* the Helixer HDF5 + a GFF3, no Mikado, no RNA-seq,
 no external toolchain. Use ``evidence`` instead to score against RNA-seq /
 protein evidence, and ``reconcile`` to actually build/fix models; this
 command never modifies a model, it only annotates confidence.
 
 Genes are classed high (>=0.85), medium (>=0.70), or low (<0.70), but the
-scores are genome-relative — prefer a cutoff from the printed distribution
+scores are genome-relative, prefer a cutoff from the printed distribution
 (or ``--summary-tsv``) over the fixed class thresholds.
 
 Coordinate mapping comes from (in order of preference): ``--input-h5``
@@ -57,7 +57,7 @@ Outputs:
 ## Examples
 
 ```bash
-  # explicit input HDF5 (preferred — enables strand-aware coordinate mapping)
+  # explicit input HDF5 (preferred, enables strand-aware coordinate mapping)
   helixforge confidence -p predictions.h5 -g genes.gff3 \
       --input-h5 input.h5 -o scores.tsv
 

@@ -37,7 +37,7 @@ class Variant:
     """One decomposed (biallelic) VCF record in internal 0-based coordinates.
 
     ``start``/``end`` is the half-open REF span (``[pos-1, pos-1+len(ref))``), so a
-    SNV spans one base and an indel spans its REF length — used for CDS overlap.
+    SNV spans one base and an indel spans its REF length, used for CDS overlap.
     ``high_impact`` is precomputed from the INFO consequence annotation.
     """
 
@@ -88,7 +88,7 @@ def parse_vcf_line(line: str, *, require_decomposed: bool = True) -> Variant | N
     """Parse one VCF data line into a :class:`Variant` (``None`` for header/blank).
 
     A multiallelic record (comma-separated ALT) raises ``ValueError`` when
-    ``require_decomposed`` — decompose upstream with ``bcftools norm -m -`` first.
+    ``require_decomposed``, decompose upstream with ``bcftools norm -m -`` first.
     """
     line = line.rstrip("\n")
     if not line or line.startswith("#"):
@@ -104,7 +104,7 @@ def parse_vcf_line(line: str, *, require_decomposed: bool = True) -> Variant | N
     alts = [a for a in alt.split(",") if a not in ("", ".")]
     if require_decomposed and len(alts) > 1:
         raise ValueError(
-            f"multiallelic VCF site {seqid}:{pos} has {len(alts)} ALT alleles — "
+            f"multiallelic VCF site {seqid}:{pos} has {len(alts)} ALT alleles, "
             "decompose to biallelic records first (`bcftools norm -m -`); "
             "HelixForge will not reason over an un-split multiallelic site."
         )
@@ -175,7 +175,7 @@ def flag_variant_impacted_genes(
     **Disabled by default** → returns ``genes`` unchanged (the identity), so the
     standard / golden path is untouched. When enabled, a gene whose CDS overlaps a
     high-impact variant gets the flag added (deduped); the gene is otherwise
-    unchanged — coordinates, tier, biotype, CDS all preserved. The flag is
+    unchanged, coordinates, tier, biotype, CDS all preserved. The flag is
     INFO-grade interpretation, not a rejection.
     """
     if not enabled:

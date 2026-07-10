@@ -1,0 +1,67 @@
+---
+title: Benchmarks
+description: HelixForge vs raw Helixer on maize B73, benchmarked against the NAM v5 reference annotation.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note" title="These are results, not claims">
+Benchmarked on ***Zea mays* B73**, chromosomes 1–10, against the **NAM v5** reference
+annotation (`Zm00001eb.1`). Comparisons use **gffcompare 0.12.10** and **Mikado 2.3.4**,
+with **raw Helixer** as the *before* baseline. RNA-seq evidence is the **21 B73 samples**
+from the [tutorial](/tutorial/inputs/).
+</Aside>
+
+## Structural agreement with the reference
+
+F1 against NAM, all isoforms:
+
+| Level | Helixer | HelixForge |
+|---|---|---|
+| Exon | 54.9 | **61.4** |
+| Intron | 62.7 | **72.1** |
+| Intron chain | 24.6 | **42.5** |
+| Locus | 37.5 | **55.5** |
+
+Transcripts whose entire intron chain exactly matches a NAM transcript rise from **12,308
+to 27,096**. The gain holds when both annotations are reduced to one transcript per gene
+(so it is not an artifact of emitting more transcripts) and at the coding (CDS) level (so
+it is not confined to UTRs). Improvement is uniform across all ten chromosomes
+(intron-chain sensitivity SD 0.6), with no regressing chromosome.
+
+## Isoform reconstruction
+
+| | Genes | Transcripts | Transcripts per gene |
+|---|---|---|---|
+| Helixer | 44,480 | 44,480 | 1.00 |
+| HelixForge | 44,307 | 71,639 | 1.62 |
+| NAM (reference) | 39,035 | 71,791 | 1.84 |
+
+HelixForge recovers most of the reference's isoform multiplicity from a **single-isoform
+prior**.
+
+## RNA-seq validates the added splice junctions
+
+Splice junctions absent from the reference, adjudicated against the RNA-seq evidence:
+
+| | Novel junctions with RNA support | Reference RNA-supported junctions recovered |
+|---|---|---|
+| Helixer | 5.0% | 77.9% (32,267 missed) |
+| HelixForge | **22.4%** | **93.6%** (9,353 missed) |
+
+The junctions HelixForge adds are RNA-supported **4.5× more often** than the input
+predictor's, and it simultaneously recovers more of the reference's real junctions rather
+than trading one for the other. The result is robust to the read-depth threshold, and
+**98.5%** of supported novel junctions carry canonical GT–AG motifs.
+
+## Coding structure
+
+Median CDS length is **1,026 nt** for HelixForge and **1,023 nt** for NAM; raw Helixer
+under-calls at **855 nt**. Reconciliation restores reference-like coding length, not only
+UTR extent.
+
+<Aside type="caution">
+Read these gains alongside the [known limitations](/limitations/): novel content is
+junctions rather than genes, ORF completeness still trails the reference, and improvement is
+net rather than universal.
+</Aside>

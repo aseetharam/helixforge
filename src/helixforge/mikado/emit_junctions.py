@@ -53,7 +53,7 @@ def run_portcullis(
     (higher precision). Raises ``FileNotFoundError`` if the binary is absent.
     The subprocess goes through the shared :func:`run_tool` so
     a Portcullis failure surfaces with the argv + a stderr tail, and the full
-    stderr is streamed to ``<out_dir>/portcullis.stderr.log`` — matching the
+    stderr is streamed to ``<out_dir>/portcullis.stderr.log``, matching the
     instrumentation every other external tool already has. Mocked in tests.
     """
     if shutil.which(portcullis_bin) is None:

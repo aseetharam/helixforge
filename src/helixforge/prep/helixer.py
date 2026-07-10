@@ -1,4 +1,4 @@
-"""OPTIONAL Helixer wrapper — GPU, off the default path."""
+"""OPTIONAL Helixer wrapper: GPU, off the default path."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def run_helixer(
 ) -> HelixerResult:
     """Run Helixer on ``genome_fasta`` → :class:`HelixerResult` (gff3, hdf5).
 
-    REQUIRES A GPU and is OFF the default prep path — most users already have
+    REQUIRES A GPU and is OFF the default prep path, most users already have
     Helixer output and pass it straight into ``PipelineConfig.helixer_gff3`` /
     ``helixer_h5``. ``lineage`` selects the bundled model weights (``model`` is
     recorded for provenance); ``subseq_len`` is Helixer's subsequence length.

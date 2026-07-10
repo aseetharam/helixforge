@@ -4,7 +4,7 @@ Inspect (read-only): score any GFF3 against RNA-seq + protein evidence.
 
 A standalone, evidence-only scorer. It works on *any* GFF3 (not just
 HelixForge output) and needs only RNA-seq (BAM / STAR SJ / StringTie) and/or
-protein evidence — no Mikado, no Helixer HDF5, no external toolchain beyond
+protein evidence, no Mikado, no Helixer HDF5, no external toolchain beyond
 an optional miniprot run. This command only *scores*; it never modifies a
 model (use ``reconcile`` for that), and it scores against evidence rather
 than the Helixer track (use ``confidence`` for that).
@@ -12,7 +12,7 @@ than the Helixer track (use ``confidence`` for that).
 Reports two **separate** AED scores (never fused): ``rna_aed`` (junctions +
 coverage + boundary, from BAM/SJ) and ``protein_aed`` (intron structure + CDS
 coverage + reference-protein coverage, from miniprot). Each is in [0, 1],
-lower = better, and is populated only when its evidence was supplied —
+lower = better, and is populated only when its evidence was supplied,
 missing evidence is neutral, not a penalty.
 
 Outputs:
@@ -41,10 +41,10 @@ Outputs:
 | `--sj-list` | File of SJ.out.tab paths, one per line (blank lines and # comments ignored). |
 | `--stringtie` | StringTie GTF, one per sample (TPM). Comma-separated or repeated. (repeatable) |
 | `--stringtie-list` | File of StringTie GTF paths, one per line (blank lines and # comments ignored). |
-| `--proteins` | Reference proteome FASTA for the protein-AED axis. Comma-separated or repeated. Aligned with miniprot (needs --genome) unless --miniprot-gff is supplied. NOTE: use a TE-filtered proteome — TE proteins align well and would give TE models a deceptively low protein_aed. (repeatable) |
+| `--proteins` | Reference proteome FASTA for the protein-AED axis. Comma-separated or repeated. Aligned with miniprot (needs --genome) unless --miniprot-gff is supplied. NOTE: use a TE-filtered proteome: TE proteins align well and would give TE models a deceptively low protein_aed. (repeatable) |
 | `--proteins-list` | File of proteome FASTA paths, one per line (blank lines and # comments ignored). |
 | `--miniprot-gff` | Precomputed miniprot GFF3 for --proteins; skips realigning on re-runs (parsed directly, no miniprot needed). |
-| `--genome` | Genome FASTA — the miniprot target when aligning --proteins from scratch. Not needed with --miniprot-gff. |
+| `--genome` | Genome FASTA, the miniprot target when aligning --proteins from scratch. Not needed with --miniprot-gff. |
 | `--reference` | Genome FASTA for CRAM decode (passed as reference_filename to pysam, so CRAM never triggers a remote ENA fetch). Ignored for BAM. If omitted, htslib honours a REF_CACHE / REF_PATH env cache. |
 | `--region` | Restrict to seqid or seqid:start-end (1-based). |
 | `--out` | Per-transcript TSV output path. (default: `evidence.tsv`) |
@@ -52,7 +52,7 @@ Outputs:
 | `--min-reads` | Minimum junction read support to qualify as evidence. (default: `3`) |
 | `--min-mapq` | Minimum read MAPQ for BAM junction extraction. (default: `10`) |
 | `--min-overhang` | Minimum spliced-read overhang (bp) on each side of a junction. (default: `8`) |
-| `-j`, `--threads` | Parallelism dial: process-parallel evidence extraction (one BAM/SJ per worker — a single coverage pass per locus, not per exon — plus the miniprot run) then process-parallel per-gene scoring. Output is identical to -j 1. (default: `1`) |
+| `-j`, `--threads` | Parallelism dial: process-parallel evidence extraction (one BAM/SJ per worker, a single coverage pass per locus, not per exon, plus the miniprot run) then process-parallel per-gene scoring. Output is identical to -j 1. (default: `1`) |
 
 ## Examples
 

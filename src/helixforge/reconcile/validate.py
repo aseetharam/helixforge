@@ -51,7 +51,7 @@ def _safe_get_sequence(
 
     Returns ``None`` (rather than raising) when the requested window runs off
     the start of the contig, has non-positive width, or the backend rejects it
-    — the caller then skips that sequence-dependent check instead of crashing on
+the caller then skips that sequence-dependent check instead of crashing on
     an edge-of-contig gene.
     """
     if start < 0 or end <= start:
@@ -180,7 +180,7 @@ def check_internal_stops(
     """``INTERNAL_STOP`` if the CDS translation has a premature stop (§5.5).
 
     An ``N``/IUPAC internal codon is "unknown" (translates to ``X``), not a
-    premature stop — so a masked base no longer silently suppresses
+    premature stop, so a masked base no longer silently suppresses
     *or* fabricates the check. ``transl_table`` selects the genetic code.
     """
     if not transcript.cds or genome is None:
@@ -193,7 +193,7 @@ def check_internal_stops(
     try:
         positions = _seq_internal_stops(seq, phase, transl_table)
     except ValueError:
-        # Truly non-IUPAC character in the extracted window — cannot evaluate.
+        # Truly non-IUPAC character in the extracted window: cannot evaluate.
         return None
     return INTERNAL_STOP if positions else None
 
@@ -309,7 +309,7 @@ def validate_gene(
         if flag is not None:
             flags.append(flag)
 
-    # Defense in depth — should never fire given model invariants, but a CDS
+    # Defense in depth: should never fire given model invariants, but a CDS
     # built outside the models would be caught here.
     if not check_cds_mod3(t):
         _log.warning(

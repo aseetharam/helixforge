@@ -33,7 +33,7 @@ _TIER_COLORS = {1: "#1b7837", 2: "#7fbf7b", 3: "#d9b365", 4: "#b35806"}
 
 
 # ---------------------------------------------------------------------------
-# Model normalisation — accept ReconciledGene, HelixerLocus, or transcripts
+# Model normalisation: accept ReconciledGene, HelixerLocus, or transcripts
 # ---------------------------------------------------------------------------
 
 
@@ -261,7 +261,7 @@ def plot_locus(
     Evidence arguments are all optional and degrade gracefully when absent. When
     ``before`` (a ``ReconciledGene`` or ``HelixerLocus``) is given, a two-panel
     before/after figure is produced. If ``out_path`` is set the figure is saved
-    (format inferred from the suffix — SVG/PDF for the manuscript).
+    (format inferred from the suffix, SVG/PDF for the manuscript).
     """
     plt, Rectangle, _ = _mpl()
 
@@ -281,7 +281,7 @@ def plot_locus(
         )
         _draw_models(ax_before, before_models, Rectangle, x0, x1)
         ax_before.set_title(
-            f"Helixer (before) — {getattr(before, 'gene_id', '')}",
+            f"Helixer (before), {getattr(before, 'gene_id', '')}",
             fontsize=8,
             loc="left",
         )

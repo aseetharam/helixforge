@@ -12,7 +12,7 @@ Two entry surfaces onto the same primitives:
   ``suggest`` (:func:`suggest_plan`) → ``plan`` (:func:`partition_by_strategy` /
   :func:`partition_genome` + :func:`reserve_id_ranges`) → ``tasks``
   (:func:`generate_task_file` / :func:`default_reconcile_template`) → run with any
-  executor (GNU parallel / xargs / Slurm array / HyperShell — see
+  executor (GNU parallel / xargs / Slurm array / HyperShell, see
   :func:`generate_hypershell_command`) → ``aggregate`` (:func:`aggregate`).
 
 This module re-exports the public surface of its submodules for convenience; the

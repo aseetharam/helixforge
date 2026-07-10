@@ -1,0 +1,99 @@
+---
+title: 4. Protein evidence (utils)
+description: One SwissProt-plants FASTA feeds both protein inputs, helixforge utils fetch-db downloads it, utils align makes the miniprot GFF, and reconcile takes the same FASTA as --protein-db.
+sidebar:
+  order: 4
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Both protein inputs to `reconcile` come from **`helixforge utils`**. You do not run any
+external protein tool by hand, and they share a **single source FASTA**:
+
+<Steps>
+
+1. `utils fetch-db` downloads and DIAMOND-formats the SwissProt-plants protein set.
+2. `utils align` runs miniprot against the genome to produce the backstop GFF (`--miniprot`).
+3. `reconcile` consumes the **same FASTA** directly as `--protein-db`.
+
+</Steps>
+
+<Aside type="tip" title="One FASTA, not two protein sources">
+`--miniprot` (backstop CDS) and `--protein-db` (DIAMOND homology, gates Mikado) are two
+different `reconcile` flags, but here they are derived from the **one**
+`swissprot_plants/uniprot_sprot_plants.fasta`. There is no second protein source to obtain.
+</Aside>
+
+## 4a. Download the protein database
+
+```bash
+apptainer exec helixforge.sif helixforge utils fetch-db \
+  --db swissprot_plants \
+  --cache-dir .
+```
+
+This downloads the taxonomic-division flat file, converts it to FASTA, and DIAMOND-formats
+it, writing:
+
+```text
+./swissprot_plants/uniprot_sprot_plants.fasta        # ← --proteins and --protein-db
+./swissprot_plants/uniprot_sprot_plants.dmnd         # DIAMOND database
+```
+
+The output directory is `<cache-dir>/<db-name>/`, so `--db swissprot_plants --cache-dir .`
+lands the FASTA at exactly `swissprot_plants/uniprot_sprot_plants.fasta`, the path the
+`align` and `reconcile` steps expect. Confirm the available names with
+`helixforge utils fetch-db --list` (see the [fetch-db reference](/cli/utils/fetch-db/)):
+
+| `--db` | Contents | Output FASTA |
+|---|---|---|
+| `swissprot` | Curated, **all organisms** | `swissprot/uniprot_sprot.fasta` |
+| `swissprot_plants` | Curated **plant** proteins (Viridiplantae) | `swissprot_plants/uniprot_sprot_plants.fasta` |
+
+<Aside type="caution" title="Reconciling the recorded command">
+The run log shows `fetch-db --db swissprot --cache-dir /tmp/`. Two adjustments make the
+paths line up with what `align`/`reconcile` actually read:
+
+- **`--db swissprot_plants`, not `swissprot`.** `--db swissprot` resolves to
+  `uniprot_sprot.fasta` (all organisms) under a `swissprot/` directory, *not* the
+  `swissprot_plants/uniprot_sprot_plants.fasta` the downstream steps consume. The plant
+  subset is `swissprot_plants`.
+- **`--cache-dir .`, not `/tmp/`.** The `--miniprot` and `--protein-db` paths are
+  **relative** (`swissprot_plants/…`). Caching into the working directory makes them
+  resolve; with `--cache-dir /tmp/` you would instead point `--proteins`/`--protein-db` at
+  `/tmp/swissprot_plants/uniprot_sprot_plants.fasta`.
+</Aside>
+
+## 4b. Align proteins to the genome (miniprot)
+
+`utils align` wraps miniprot to produce the protein-to-genome GFF3 that becomes
+`reconcile --miniprot`:
+
+```bash
+apptainer exec helixforge.sif helixforge utils align \
+  --genome genome/Zm-B73-REFERENCE-NAM-5.0.fa \
+  --proteins swissprot_plants/uniprot_sprot_plants.fasta \
+  --out Zm-B73-sw-plants-miniprot.gff3 \
+  --threads ${SLURM_CPUS_ON_NODE}
+```
+
+| Flag | Value |
+|---|---|
+| `--genome` | `genome/Zm-B73-REFERENCE-NAM-5.0.fa` |
+| `--proteins` | `swissprot_plants/uniprot_sprot_plants.fasta` (from 4a) |
+| `--out` | `Zm-B73-sw-plants-miniprot.gff3` → `reconcile --miniprot` |
+| `--threads` | `${SLURM_CPUS_ON_NODE}` (the allocation's cores) |
+
+See the [`utils align` reference](/cli/utils/align/) for the full option list.
+
+## What feeds reconcile
+
+<Steps>
+
+1. `swissprot_plants/uniprot_sprot_plants.fasta` → **`reconcile --protein-db`** (DIAMOND
+   homology; gates Mikado + isoform discovery).
+2. `Zm-B73-sw-plants-miniprot.gff3` → **`reconcile --miniprot`** (backstop CDS only).
+
+</Steps>
+
+Next: [run the Helixer gene prediction →](/tutorial/helixer/)

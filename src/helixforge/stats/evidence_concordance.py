@@ -64,7 +64,7 @@ def _f1(precision: float | None, recall: float | None) -> float | None:
 
 
 # ---------------------------------------------------------------------------
-# AED — composite Annotation Edit Distance against the evidence
+# AED: composite Annotation Edit Distance against the evidence
 # ---------------------------------------------------------------------------
 
 
@@ -78,9 +78,9 @@ def compute_aed(
     Each argument is an independent evidence-agreement signal already scaled to
     ``[0, 1]`` (or ``None`` when that evidence is unavailable for the isoform):
 
-    - ``junction_support`` — fraction of introns confirmed by splice junctions,
-    - ``expression`` — RNA-seq expression presence/level signal,
-    - ``protein_coverage`` — fraction of a homologous protein covered by the ORF.
+    - ``junction_support``, fraction of introns confirmed by splice junctions,
+    - ``expression``, RNA-seq expression presence/level signal,
+    - ``protein_coverage``, fraction of a homologous protein covered by the ORF.
 
     AED is ``1 - mean(available signals)``. With **no** signals available the
     distance is undefined → ``None``. This is the deliberately simple composite
@@ -98,7 +98,7 @@ def compute_aed(
 
 
 # ---------------------------------------------------------------------------
-# D1.1 — intron concordance vs the filtered splice-junction set
+# D1.1, intron concordance vs the filtered splice-junction set
 # ---------------------------------------------------------------------------
 
 
@@ -128,18 +128,18 @@ def intron_concordance(
 
     For each isoform every intron is classified as:
 
-    - **supported** — an exact junction (donor==intron.start, acceptor==intron.end,
+    - **supported**, an exact junction (donor==intron.start, acceptor==intron.end,
       same strand, ``read_count >= min_reads``) exists;
-    - **contradicted** — not supported, but a qualifying junction shares exactly
+    - **contradicted**, not supported, but a qualifying junction shares exactly
       one boundary (the evidence places a *different* splice site here);
-    - **novel** — neither supported nor contradicted (no junction touches it).
+    - **novel**, neither supported nor contradicted (no junction touches it).
 
     Treating the qualifying junction set as ground truth gives precision/recall/F1
     of the isoform's intron chain:
 
     - ``precision = supported / num_introns`` (model introns that are confirmed),
     - ``recall = matched_junctions / relevant_junctions`` (evidence reproduced),
-    - ``f1`` — their harmonic mean.
+    - ``f1``, their harmonic mean.
 
     Returns ``{"gene_id", "isoforms": {tid: {...}}}``. Mono-exon isoforms have no
     introns → counts are ``0`` and precision/recall/f1 are ``None``.
@@ -180,7 +180,7 @@ def intron_concordance(
 
 
 # ---------------------------------------------------------------------------
-# D1.2 — CDS completeness / ORF quality
+# D1.2, CDS completeness / ORF quality
 # ---------------------------------------------------------------------------
 
 
@@ -295,7 +295,7 @@ def _isoform_aed(tx: Any, protein_coverage: float | None) -> float | None:
 
 
 # ---------------------------------------------------------------------------
-# D1.3 — evidence agreement matrix
+# D1.3, evidence agreement matrix
 # ---------------------------------------------------------------------------
 
 
@@ -329,9 +329,9 @@ def evidence_agreement_matrix(
     ``"miniprot"``) to a list of feature-bearing objects (transcripts / loci /
     alignments). For each isoform × source we report:
 
-    - ``exon_overlap`` — fraction of the isoform's exonic bases covered by any of
+    - ``exon_overlap``, fraction of the isoform's exonic bases covered by any of
       the source's exon-like intervals (``.exons`` else ``.cds_segments``),
-    - ``intron_match`` — fraction of the isoform's introns that exactly match an
+    - ``intron_match``, fraction of the isoform's introns that exactly match an
       intron implied by the source.
 
     Shows which evidence drove each model. Returns ``{tid: {source: {...}}}``.
@@ -368,7 +368,7 @@ def evidence_agreement_matrix(
 
 
 # ---------------------------------------------------------------------------
-# D1.4 — tidy concordance table
+# D1.4, tidy concordance table
 # ---------------------------------------------------------------------------
 
 CONCORDANCE_COLUMNS = (

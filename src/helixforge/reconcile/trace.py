@@ -1,4 +1,4 @@
-"""TRaCE — Transcript Ranking and Canonical Election."""
+"""TRaCE: Transcript Ranking and Canonical Election."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ class Ballot:
     a candidate the voter does not rank maps to ``None``. Ties share a rank.
     ``kind`` is ``"sample"`` or ``"length"``; ``voter`` is the sample id (sample
     ballots) or the metric name ``"domain"`` / ``"protein"`` / ``"cdna"`` (length
-    ballots) — used for weighting + electorate balancing.
+    ballots), used for weighting + electorate balancing.
     """
 
     ranks: dict[str, int | None]
@@ -171,7 +171,7 @@ def aed_ballot(
     that overlaps it (same seqid+strand, ``tpm >= min_tpm``, proportion-overlap
     ``>= min_overlap``) is chosen; the candidate's AED to it (overlap region only)
     is its score. A candidate whose best-expressed overlapping transcript has AED
-    ``> max_aed`` — or has no qualifying transcript — is left unranked (``None``).
+    ``> max_aed``, or has no qualifying transcript, is left unranked (``None``).
     Lower AED ⇒ better rank; ties share a rank.
     """
     usable = [s for s in sample_transcripts if (s.tpm or 0.0) >= min_tpm]
@@ -352,7 +352,7 @@ def domain_coverage_by_transcript(
     ``domain_complete``, else ``0.0``; transcripts with no record are simply
     absent (the voter treats them as ``0.0``). A true per-isoform coverage
     fraction requires running functional annotation on **all** isoforms with
-    coordinate-aware domain spans — documented future work. With no records (the
+    coordinate-aware domain spans, documented future work. With no records (the
     default pipeline path) this returns ``{}`` and the domain voter is disabled.
     """
     out: dict[str, float] = {}
@@ -381,7 +381,7 @@ def trace_order(
     election, and returns ``gene_transcripts`` permuted into the elected order.
     A single-transcript gene, or a gene with **no** expression/domain evidence,
     is returned in its input order unchanged (the caller then keeps the
-    ``combined_score`` primary) — length voters alone are intentionally *not*
+    ``combined_score`` primary), length voters alone are intentionally *not*
     allowed to reorder, since that would promote intron-retention-inflated
     longest isoforms (the very failure TRaCE exists to avoid).
     """

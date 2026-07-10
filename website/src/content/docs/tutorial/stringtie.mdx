@@ -1,0 +1,88 @@
+---
+title: 3. Transcript assembly (StringTie)
+description: Assemble reference-free transcripts per sample with StringTie in reverse-stranded mode, then build the stringtie.fofn that feeds reconcile.
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Assemble transcripts from each STAR BAM with **StringTie**. One GTF per sample becomes the
+`stringtie.fofn` list behind `reconcile --stringtie-list`, the transcript evidence Mikado
+reconciles against the Helixer models.
+
+<Aside type="caution" title="Reverse-stranded → --rf">
+The B73 libraries are reverse-stranded (dUTP), so StringTie is run with **`--rf`**
+(first-strand). This must match the STAR strand handling from
+[Step 2](/tutorial/star/), a mismatch assembles transcripts on the wrong strand.
+</Aside>
+
+## The StringTie template
+
+The per-sample command. `-p` is generalized to the Slurm allocation and the BAM/GTF names
+are derived from the sample, nothing is hardcoded:
+
+```bash
+stringtie <sample>_Aligned.sortedByCoord.out.bam --rf -m 100 -p ${SLURM_CPUS_ON_NODE} -v -o <sample>.gtf
+```
+
+| Flag | Meaning |
+|---|---|
+| `--rf` | Reverse-stranded (first-strand / dUTP) library. |
+| `-m 100` | Minimum assembled transcript length, 100 nt. |
+| `-p ${SLURM_CPUS_ON_NODE}` | Threads, the cores of the Slurm allocation. |
+| `-v` | Verbose logging. |
+| `-o <sample>.gtf` | Per-sample output GTF. |
+
+## Run it over the 21 samples
+
+A Slurm array over `samples.txt`, writing GTFs to `stringtie/`:
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=stringtie
+#SBATCH --array=1-21
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=16G
+#SBATCH --time=2:00:00
+#SBATCH --output=logs/stringtie_%A_%a.log
+set -euo pipefail
+
+module load stringtie
+
+BAM_DIR="bam"
+OUT_DIR="stringtie"
+SAMPLE_LIST="samples.txt"
+mkdir -p "${OUT_DIR}" logs
+
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "${SAMPLE_LIST}")
+[[ -n "${SAMPLE}" ]] || { echo "no sample for task ${SLURM_ARRAY_TASK_ID}"; exit 1; }
+
+stringtie "${BAM_DIR}/${SAMPLE}_Aligned.sortedByCoord.out.bam" \
+    --rf -m 100 -p ${SLURM_CPUS_ON_NODE} -v \
+    -o "${OUT_DIR}/${SAMPLE}.gtf"
+```
+
+```bash
+sbatch stringtie.sh
+```
+
+## Build stringtie.fofn
+
+One GTF path per line, in `samples.txt` order:
+
+```bash
+# stringtie.fofn  → reconcile --stringtie-list
+while read -r s; do echo "stringtie/${s}.gtf"; done < samples.txt > stringtie.fofn
+
+wc -l stringtie.fofn   # 21
+```
+
+`stringtie.fofn` → **`reconcile --stringtie-list`**.
+
+<Aside type="note">
+`--stringtie-list` (with `--protein-db`) is what enables Mikado reconciliation and isoform
+discovery. Without transcript assemblies the run falls back to backstop-only output.
+</Aside>
+
+Next: [prepare protein evidence with helixforge utils →](/tutorial/protein/)

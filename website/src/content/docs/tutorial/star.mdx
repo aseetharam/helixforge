@@ -1,0 +1,152 @@
+---
+title: 2. RNA-seq alignment (STAR)
+description: Build a maize STAR genome index and 2-pass map all 21 paired-end B73 samples, producing coordinate-sorted BAMs and splice junctions for reconcile.
+sidebar:
+  order: 2
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Align the 21 paired-end B73 samples with **STAR**, producing a coordinate-sorted BAM and a
+`SJ.out.tab` splice-junction file per sample. Those feed `reconcile --bam-list` and
+`--star-sj-list`, and the BAMs are the input to [StringTie](/tutorial/stringtie/).
+
+<Aside type="caution" title="Reverse-stranded → 2-pass">
+The B73 libraries are reverse-stranded (dUTP). We map **2-pass** (`--twopassMode Basic`),
+which discovers novel junctions in a first pass and re-maps against them, the same
+two-round mapping the input BAM naming reflects. Strandedness is honored downstream by
+StringTie's `--rf`.
+</Aside>
+
+## Genome-size-dependent parameters
+
+The STAR command structure here is the standard paired-end recipe, but three parameters
+**must be recomputed for the ~2.4 Gb maize genome**. The Arabidopsis (~135 Mb) defaults
+are wrong for maize:
+
+| Parameter | Value | Why |
+|---|---|---|
+| `--genomeSAindexNbases` | `14` | `min(14, log2(GenomeLength)/2 - 1)`. For a 2.4 Gb genome this saturates at STAR's default **14** (Arabidopsis used 12, too small here). |
+| `--sjdbOverhang` | `149` | Reads are **150 bp** paired-end → `readLength − 1 = 149`. |
+| `--limitGenomeGenerateRAM` | `64000000000` | ~64 GB. STAR's 31 GB default is too small to build a 2.4 Gb index; size the allocation to the genome, not to Arabidopsis. |
+
+## Build the STAR index
+
+Built once, from the genome FASTA (no reference annotation; this is a *de novo*
+annotation run):
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=star_index
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=72G
+#SBATCH --time=4:00:00
+set -euo pipefail
+
+module load star
+
+GENOME="genome/Zm-B73-REFERENCE-NAM-5.0.fa"
+INDEX_DIR="star_index"
+mkdir -p "${INDEX_DIR}"
+
+STAR --runMode genomeGenerate \
+     --runThreadN ${SLURM_CPUS_PER_TASK} \
+     --genomeDir "${INDEX_DIR}" \
+     --genomeFastaFiles "${GENOME}" \
+     --sjdbOverhang 149 \
+     --genomeSAindexNbases 14 \
+     --limitGenomeGenerateRAM 64000000000
+```
+
+## Map the 21 samples (2-pass, paired-end)
+
+A Slurm **array job** over `samples.txt`, one task per sample, no hardcoded sample name.
+Intron-size limits are raised well above the Arabidopsis defaults because maize introns are
+far longer:
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=star_align
+#SBATCH --array=1-21
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=48G
+#SBATCH --time=6:00:00
+#SBATCH --output=logs/star_%A_%a.log
+set -euo pipefail
+
+module load star samtools
+
+INDEX_DIR="star_index"
+FASTQ_DIR="rnaseq/fastq"
+OUT_DIR="bam"
+SAMPLE_LIST="samples.txt"
+mkdir -p "${OUT_DIR}" logs
+
+# Sample for this array task (one line = one sample ID)
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "${SAMPLE_LIST}")
+[[ -n "${SAMPLE}" ]] || { echo "no sample for task ${SLURM_ARRAY_TASK_ID}"; exit 1; }
+
+R1="${FASTQ_DIR}/${SAMPLE}_R1.fq.gz"
+R2="${FASTQ_DIR}/${SAMPLE}_R2.fq.gz"
+
+STAR --runMode alignReads \
+     --runThreadN ${SLURM_CPUS_PER_TASK} \
+     --genomeDir "${INDEX_DIR}" \
+     --readFilesIn "${R1}" "${R2}" \
+     --readFilesCommand zcat \
+     --outFileNamePrefix "${OUT_DIR}/${SAMPLE}_" \
+     --outSAMtype BAM SortedByCoordinate \
+     --outSAMattributes NH HI AS NM MD XS \
+     --outSAMstrandField intronMotif \
+     --twopassMode Basic \
+     --sjdbOverhang 149 \
+     --alignIntronMin 20 \
+     --alignIntronMax 100000 \
+     --alignMatesGapMax 100000 \
+     --outFilterMultimapNmax 20 \
+     --outFilterMismatchNmax 6 \
+     --outFilterMismatchNoverReadLmax 0.04
+
+# Index the coordinate-sorted BAM
+samtools index -@ ${SLURM_CPUS_PER_TASK} "${OUT_DIR}/${SAMPLE}_Aligned.sortedByCoord.out.bam"
+
+# Drop STAR's per-run temp dirs
+rm -rf "${OUT_DIR}/${SAMPLE}__STARgenome" "${OUT_DIR}/${SAMPLE}__STARpass1"
+```
+
+Submit both:
+
+```bash
+sbatch star_index.sh
+# once the index finishes:
+sbatch star_align.sh
+```
+
+Each sample produces, under `bam/`:
+
+- `<sample>_Aligned.sortedByCoord.out.bam` (+ `.bai`) → **`--bam-list`** and the StringTie input
+- `<sample>_SJ.out.tab` → **`--star-sj-list`**
+
+## Build the file-of-filenames lists
+
+`reconcile` reads BAMs and junctions from plain path lists (one per line; blank lines and
+`#` comments ignored). Build them from `samples.txt` so order and membership are exact:
+
+```bash
+# bam.fofn  → reconcile --bam-list
+while read -r s; do echo "bam/${s}_Aligned.sortedByCoord.out.bam"; done < samples.txt > bam.fofn
+
+# sj.fofn   → reconcile --star-sj-list
+while read -r s; do echo "bam/${s}_SJ.out.tab"; done < samples.txt > sj.fofn
+
+wc -l bam.fofn sj.fofn   # 21 and 21
+```
+
+<Steps>
+
+1. `bam.fofn`, 21 coordinate-sorted BAM paths → **`reconcile --bam-list`**
+2. `sj.fofn`, 21 `SJ.out.tab` paths → **`reconcile --star-sj-list`**
+
+</Steps>
+
+Next: [assemble transcripts with StringTie →](/tutorial/stringtie/)

@@ -62,7 +62,7 @@ def write_bed12(genes: list[ReconciledGene], path: str | Path) -> Path:
     """Write a BED12 of every isoform (sorted by genomic position); return Path.
 
     Standards-valid for IGV/JBrowse2/UCSC: ``thickStart``/``thickEnd`` mark the
-    CDS, exons are blocks, both strands handled (strand is column 6 only — block
+    CDS, exons are blocks, both strands handled (strand is column 6 only, block
     order is always genomic low→high).
     """
     rows = []
@@ -85,7 +85,7 @@ def write_bigbed(
     """Convert the BED12 to bigBed via UCSC ``bedToBigBed``; return Path.
 
     ``chrom_sizes`` is ``{seqid: length}`` (written to a temp ``.sizes`` file).
-    Raises ``RuntimeError`` with a clear hint if ``bedToBigBed`` is not on PATH —
+    Raises ``RuntimeError`` with a clear hint if ``bedToBigBed`` is not on PATH,
     bigBed has no pure-Python writer.
     """
     path = Path(path)
@@ -104,7 +104,7 @@ def write_bigbed(
         )
     except FileNotFoundError as exc:
         raise RuntimeError(
-            f"{bedtobigbed_bin!r} not found — install UCSC bedToBigBed to write bigBed"
+            f"{bedtobigbed_bin!r} not found, install UCSC bedToBigBed to write bigBed"
         ) from exc
     except subprocess.CalledProcessError as exc:  # pragma: no cover - tool-specific
         raise RuntimeError(

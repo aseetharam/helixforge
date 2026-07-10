@@ -36,13 +36,13 @@ DEFAULT_MIN_OVERHANG = 8
 # Coverage to count an exon as "expressed" / a boundary as supported (v1 default).
 DEFAULT_MIN_EXON_COVERAGE = 5
 
-# RNA-AED weights — v1 ``EvidenceScorerConfig`` defaults, ported verbatim. They
+# RNA-AED weights: v1 ``EvidenceScorerConfig`` defaults, ported verbatim. They
 # sum to 1.0 (junction is the primary evidence for multi-exon genes).
 RNA_W_JUNCTION = 0.5
 RNA_W_COVERAGE = 0.3
 RNA_W_BOUNDARY = 0.2
 
-# protein-AED weights — mirror the RNA weights (structure primary, like junctions).
+# protein-AED weights: mirror the RNA weights (structure primary, like junctions).
 PROT_W_STRUCT = 0.5
 PROT_W_CDS = 0.3
 PROT_W_PROT = 0.2
@@ -270,7 +270,7 @@ def collect_junctions(
 
     Per-file extraction is independent, so with ``threads > 1`` the files are
     scanned in a **process** pool (one file per worker); the per-file read scan +
-    CIGAR walk is GIL-bound, so processes — not threads — engage multiple cores.
+    CIGAR walk is GIL-bound, so processes, not threads, engage multiple cores.
     The merge is then done deterministically in this process, so the result is
     identical to the serial path. ``min_mapq`` / ``min_overhang`` gate BAM
     extraction; ``min_reads`` is the per-file STAR unique-read floor. Returns a
@@ -294,7 +294,7 @@ def collect_junctions(
 
     # One task per source file; source_id keeps the per-file identity for the
     # ``samples`` count regardless of completion order. ``partial`` (not a lambda)
-    # so each task is picklable for the process pool — the per-file read scan +
+    # so each task is picklable for the process pool: the per-file read scan +
     # CIGAR walk is GIL-bound, so processes (not threads) are what engage cores.
     tasks: list[tuple[tuple[str, int], Any]] = []
     for i, path in enumerate(bam_paths):
@@ -396,7 +396,7 @@ def collect_coverage(
     Each BAM is scanned independently (process-parallel; one htslib
     ``count_coverage`` pass per gene locus, not a pileup per exon) and the
     per-base depth arrays are combined by **element-wise mean across
-    samples** — so a single BAM reproduces that BAM's coverage exactly and adding
+    samples**, so a single BAM reproduces that BAM's coverage exactly and adding
     samples averages depth rather than inflating it. The combined per-exon array
     yields ``(mean, median, min)``; the per-base ``median`` feeds both the
     expressed-exon ratio and the boundary ratio (v1 semantics), ``mean`` the
@@ -464,14 +464,14 @@ def _transcript_coverage_metrics(
     ``min_exon_coverage`` (v1 ``EvidenceScorer.score_gene`` semantics).
 
     ``boundary_ratio`` is ``(start_supported + stop_supported) / 2`` where a
-    boundary is supported when its **terminal exon is expressed** — the same
+    boundary is supported when its **terminal exon is expressed**, the same
     per-base median ≥ threshold test, applied to the lowest- and highest-
     coordinate exons (plus strand: the low-coordinate exon holds the start, the
-    high-coordinate exon the stop; minus strand swaps the labels — the ratio is
+    high-coordinate exon the stop; minus strand swaps the labels, the ratio is
     symmetric, but the labelling is kept correct). This replaces the old per-exon
-    *minimum* depth: a single low-coverage base anywhere in a terminal exon — a
+    *minimum* depth: a single low-coverage base anywhere in a terminal exon, a
     near-universal coverage dip, or a Helixer UTR annotated past where reads
-    actually reach — drove the minimum to ~0 and pinned ``boundary_ratio`` to 0
+    actually reach, drove the minimum to ~0 and pinned ``boundary_ratio`` to 0
     even for deeply covered genes. The median is robust to both.
     """
     ordered = sorted(exons, key=lambda e: e.start)
@@ -533,12 +533,12 @@ def protein_aed_from_ratios(
     prot_cov_ratio: float,
     weights: tuple[float, float, float] = (PROT_W_STRUCT, PROT_W_CDS, PROT_W_PROT),
 ) -> float:
-    """Protein analogue of :func:`rna_aed_from_ratios` — identical distance shape.
+    """Protein analogue of :func:`rna_aed_from_ratios`, identical distance shape.
 
     ``struct_ratio is None`` means the model has no intron chain to compare
     (single-exon coding). The structural term is then **dropped** and the distance
     is renormalised over the two remaining components (``w_cds`` + ``w_prot``), so a
-    missing structural comparison neither credits nor penalises the AED — it never
+    missing structural comparison neither credits nor penalises the AED, it never
     silently becomes ``struct_ratio = 1.0`` ("introns agree" when there are none).
     """
     ws, wc, wp = weights
@@ -612,7 +612,7 @@ def score_transcript_protein(
     aln_introns = set(_introns_from_intervals(alignment.cds_segments))
     struct_ratio: float | None
     if not model_introns:
-        # No model intron chain — structural agreement is undefined, not perfect.
+        # No model intron chain: structural agreement is undefined, not perfect.
         # Report it blank (``None``) rather than 1.0, which would mean "introns
         # agree"; the protein AED renormalises over the remaining components.
         struct_ratio = None
@@ -744,7 +744,7 @@ def score_transcript_evidence(
     returns ``{num_introns, supported, contradicted, novel_in_data,
     junction_support_fraction, intron_precision, intron_recall, intron_f1}``,
     plus ``mean_coverage`` (only when ``coverage`` is given) and ``tpm`` (only
-    when ``tpm_index`` has a StringTie transcript overlapping this model — see
+    when ``tpm_index`` has a StringTie transcript overlapping this model, see
     :func:`_best_overlapping_tpm`).
 
     A single-exon transcript has no introns: counts are ``0`` and the
@@ -764,7 +764,7 @@ def score_transcript_evidence(
     # A transcript with no introns has no intron chain to score: every intron
     # metric must be blank. ``intron_concordance`` already returns precision/f1 as
     # ``None`` here, but it returns ``recall == 0.0`` (not ``None``) whenever a
-    # qualifying junction merely overlaps the locus — matched/qualifying = 0/k.
+    # qualifying junction merely overlaps the locus: matched/qualifying = 0/k.
     # That leaks a meaningless 0.0 into ``intron_recall`` for single-exon models.
     # Force all four to ``None`` so "blank iff num_introns == 0" holds exactly.
     if num:
@@ -863,7 +863,7 @@ def _score_job(job: dict[str, Any]) -> dict[str, Any]:
         **{k: v for k, v in metrics.items() if k not in ("mean_coverage", "tpm")},
     }
 
-    # RNA-AED — only meaningful with BAM coverage (needs all three ratios).
+    # RNA-AED: only meaningful with BAM coverage (needs all three ratios).
     if has_cov and cov_ratio is not None and bound_ratio is not None:
         num = metrics["num_introns"]
         jr = metrics["supported"] / num if num else 1.0  # v1: single-exon -> 1.0
@@ -874,7 +874,7 @@ def _score_job(job: dict[str, Any]) -> dict[str, Any]:
             jr, cov_ratio, bound_ratio, _W_PARAMS["rna_weights"]
         )
 
-    # protein-AED — only when a proteome / miniprot GFF was supplied.
+    # protein-AED: only when a proteome / miniprot GFF was supplied.
     if _W_ALN_INDEX is not None:
         best = _best_alignment(_W_ALN_INDEX, seqid, t_start, t_end, strand)
         if best is not None:
@@ -934,7 +934,7 @@ def score_annotation(
     """Score every transcript of any GFF3 against the supplied evidence.
 
     Returns a per-transcript ``pandas.DataFrame`` (columns :data:`TSV_COLUMNS`).
-    ``gff3_path`` need not be HelixForge output — it is parsed with
+    ``gff3_path`` need not be HelixForge output, it is parsed with
     ``GFF3Parser.parse_genes_generic`` so any GFF3 works. Junctions are unioned
     from ``bam_paths`` / ``star_sj_paths``; ``tpm`` from ``stringtie_gtfs`` by
     exonic overlap; per-transcript coverage + ``rna_aed`` from BAMs;
@@ -1076,7 +1076,7 @@ def _best_transcript_key(row: "pd.Series") -> tuple[float, float, float, str]:
 
 
 def rollup_genes(df: pd.DataFrame) -> pd.DataFrame:
-    """One row per gene — its best-supported transcript (see :func:`_best_transcript_key`).
+    """One row per gene: its best-supported transcript (see :func:`_best_transcript_key`).
 
     The schema is identical to the per-transcript table (:data:`TSV_COLUMNS`); the
     chosen transcript's row is carried verbatim. Rows are sorted by ``gene_id``.
@@ -1111,7 +1111,7 @@ def summarize_evidence(df: pd.DataFrame) -> dict[str, Any]:
     - ``mean_rna_aed`` is over the ``n_rna_aed`` transcripts that have an RNA AED
       (every transcript, once BAM coverage was supplied), and
     - ``mean_protein_aed`` is over only the ``n_protein_aed`` transcripts with a
-      protein hit — a strict subset.
+      protein hit, a strict subset.
 
     Comparing the two means directly is comparing all transcripts against the
     protein-hit subset; read each next to its ``n_…`` count. "Fully supported" and

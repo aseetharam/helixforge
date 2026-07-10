@@ -19,7 +19,7 @@ _log = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Parsing helpers — count isoforms, identify multi-isoform loci
+# Parsing helpers: count isoforms, identify multi-isoform loci
 # ---------------------------------------------------------------------------
 
 
@@ -41,7 +41,7 @@ def _multiiso_genes(
 
 
 # ---------------------------------------------------------------------------
-# Subset GFF3 writer (I/O boundary — internal → 1-based inclusive GFF3)
+# Subset GFF3 writer (I/O boundary, internal → 1-based inclusive GFF3)
 # ---------------------------------------------------------------------------
 
 
@@ -153,7 +153,7 @@ def _summary(counts: list[int], min_isoforms: int) -> dict[str, float]:
 # the whole Araport11 multi-isoform catalog (long-read-defined). The fix is to
 # condition on **1:1-matched genes** and match on **internal splice structure
 # only** (intron chains/junctions), which is terminus-independent by construction
-# — Araport11 termini come from long-read 5'/3' data we do not have, so requiring
+#, Araport11 termini come from long-read 5'/3' data we do not have, so requiring
 # identical termini would tank precision for a reason unrelated to splicing.
 # Pure Python: no ``mikado`` binary, fully unit-testable on synthetic GFF3s.
 # ---------------------------------------------------------------------------
@@ -189,7 +189,7 @@ def _gene_footprint(gene: dict[str, Any]) -> list[tuple[int, int]]:
     """Disjoint genomic footprint (merged exon union) of all the gene's exons.
 
     ``reciprocal_overlap``/``overlap_bases`` assume disjoint interval lists, but
-    a gene's per-transcript exons overlap each other — so merge the exon union
+    a gene's per-transcript exons overlap each other, so merge the exon union
     into disjoint intervals first. Falls back to the gene span if it has no exons.
     """
     ivs = sorted(
@@ -212,7 +212,7 @@ def _primary_tid(gene: dict[str, Any]) -> str | None:
     Only the **prediction** side has a known primary; ``parse_genes_generic`` does
     not surface the ``primary=true`` attribute, so we use the stable ``.N`` id
     convention (primary = ``.1``). Used solely to split predicted *alternative*
-    (non-primary) isoforms for the precision numerator — never on the reference
+    (non-primary) isoforms for the precision numerator, never on the reference
     (we do not invent a reference canonical transcript).
     """
     txs = gene["transcripts"]
@@ -232,7 +232,7 @@ def _match_genes(
     Same-seqid, same-strand only. Edges are gene pairs whose exon-union footprints
     reach ``reciprocal_overlap >= min_reciprocal``. A gene touched by more than one
     above-threshold edge is part of a split/merge (a pred over >1 ref, or a ref
-    over >1 pred) and is **excluded** — split/merge is a gene-boundary concern, not
+    over >1 pred) and is **excluded**, split/merge is a gene-boundary concern, not
     an isoform-quality one. Remaining edges are strictly 1:1 (each side degree 1).
     ``n_split_merge`` is the count of prediction genes that had a qualifying
     overlap but were dropped this way. Deterministic: matches are ordered by
@@ -376,7 +376,7 @@ def matched_locus_isoform_accuracy(
       proposes an alternative isoform, how often is it a real Araport11 chain."
     * **Matched-locus primary precision** (``primary_precision``): over the same
       multi-iso matched loci, the fraction of predicted **primary/canonical** (the
-      ``.1``) transcripts whose intron chain matches some reference chain — "is the
+      ``.1``) transcripts whose intron chain matches some reference chain, "is the
       *elected canonical* transcript real?". This is the metric that responds to
       TRaCE primary re-election (``--trace-primary``): TRaCE promotes the
       evidence-best transcript to ``.1``, so it *raises* this precision while
@@ -388,7 +388,7 @@ def matched_locus_isoform_accuracy(
       shared genes, **not** the whole 10,737-locus catalog.
     * **Junction-level precision/recall** over *all* 1:1-matched genes (not only
       multi-iso): introns pooled per matched gene, ``|pred∩ref| / |pred|`` and
-      ``/ |ref|``. Granular and terminus-independent — credits individual correct
+      ``/ |ref|``. Granular and terminus-independent, credits individual correct
       splice events; one wrong intron does not zero a 10-intron transcript.
 
     ``junction_tolerance`` (default 0 = exact) allows ±N bp on each splice site,
@@ -399,7 +399,7 @@ def matched_locus_isoform_accuracy(
         pred_genes, ref_genes, min_reciprocal=min_reciprocal
     )
 
-    # D2 — matched-locus alternative-isoform precision/recall (multi-iso both sides).
+    # D2: matched-locus alternative-isoform precision/recall (multi-iso both sides).
     pred_alt_total = pred_alt_hit = 0
     ref_iso_total = ref_iso_hit = 0
     pred_primary_total = pred_primary_hit = 0
@@ -413,7 +413,7 @@ def matched_locus_isoform_accuracy(
         primary = _primary_tid(p)
         for t in p["transcripts"]:
             if str(t["transcript_id"]) == primary:
-                # D2b — primary/canonical precision: is the *elected* canonical
+                # D2b: primary/canonical precision: is the *elected* canonical
                 # transcript a real Araport11 chain? This is the metric TRaCE moves
                 # (it changes which transcript is primary); the alt-precision below
                 # scores only the remaining non-primary isoforms.
@@ -437,7 +437,7 @@ def matched_locus_isoform_accuracy(
     iso_recall = _ratio(ref_iso_hit, ref_iso_total)
     primary_precision = _ratio(pred_primary_hit, pred_primary_total)
 
-    # D3 — junction-level (intron-set) precision/recall over ALL matched genes.
+    # D3: junction-level (intron-set) precision/recall over ALL matched genes.
     pred_intr_total = pred_intr_hit = 0
     ref_intr_total = ref_intr_hit = 0
     for p, r in matches:
@@ -463,7 +463,7 @@ def matched_locus_isoform_accuracy(
         "junction_precision": junction_precision,
         "junction_recall": junction_recall,
         "junction_f1": _harmonic_f1(junction_precision, junction_recall),
-        # Raw denominators / numerators — every reported value is traceable.
+        # Raw denominators / numerators: every reported value is traceable.
         "pred_alt_isoforms_n": pred_alt_total,
         "pred_alt_isoforms_hit_n": pred_alt_hit,
         "pred_primary_n": pred_primary_total,
@@ -513,7 +513,7 @@ def isoform_accuracy(
         ``<prefix>_whole.stats`` are written, and the multi-isoform subset GFF3s
         next to them.
     min_isoforms
-        Threshold for "multi-isoform" (default 2 — any AS at all).
+        Threshold for "multi-isoform" (default 2, any AS at all).
     helixer_gff3
         Optional Helixer input GFF3 for the real before-counts. When omitted the
         Helixer side is taken as exactly 1 transcript/gene (its documented design,

@@ -1,4 +1,4 @@
-# HelixForge permissive (high-recall) Mikado scoring profile — TEMPLATE.
+# HelixForge permissive (high-recall) Mikado scoring profile, TEMPLATE.
 #
 # Relaxed variant of the strict profile: lower entry thresholds, more lenient
 # isoform admission, weaker fragment pruning.  Use when maximising isoform
@@ -21,7 +21,7 @@ requirements:
     exon_num.mono: {operator: eq, value: 1}
     exon_num.multi: {operator: gt, value: 1}
 
-# ORF coherence (same floor as strict — below 100 aa is noise).
+# ORF coherence (same floor as strict, below 100 aa is noise).
 cds_requirements:
   expression:
     - combined_cds_length

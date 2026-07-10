@@ -39,7 +39,7 @@ NO_EVIDENCE = "NO_EVIDENCE"
 # Junction index
 # ---------------------------------------------------------------------------
 #
-# The list-based matchers below scan the *entire* junction set per intron —
+# The list-based matchers below scan the *entire* junction set per intron,
 # O(introns × all_junctions), called once per backstop gene. At maize scale
 # (J ~ 10⁶) that is the second O(N²)-flavored cliff after the ID allocator.
 # JunctionIndex builds the set once into, per (seqid, strand):
@@ -88,7 +88,7 @@ class JunctionIndex:
                 acc_ivals[key] = []
             i = len(bucket.juncs)
             bucket.juncs.append(j)
-            # First-on-tie, max-read-count otherwise — mirrors the scan's strict `>`.
+            # First-on-tie, max-read-count otherwise, mirrors the scan's strict `>`.
             ek = (j.donor, j.acceptor)
             cur = bucket.exact.get(ek)
             if cur is None or j.read_count > cur.read_count:
@@ -190,7 +190,7 @@ def find_matching_junction(
     A match has ``|donor - intron.start| <= tolerance`` **and**
     ``|acceptor - intron.end| <= tolerance``. Returns the highest-read-count
     match, or ``None``. ``junctions`` may be a list (linear scan) or a
-    :class:`JunctionIndex` (O(1)/O(log J) — identical result).
+    :class:`JunctionIndex` (O(1)/O(log J), identical result).
     """
     if isinstance(junctions, JunctionIndex):
         return junctions.find_matching(intron, seqid, strand, tolerance, min_reads)
@@ -220,7 +220,7 @@ def find_contradicting_junction(
     Represents a well-supported alternative splice site: one end agrees (within
     ``tolerance``), the other disagrees (beyond ``tolerance``). The disagreeing
     end is what gets corrected. Returns the highest-read-count such junction, or
-    ``None``. Junctions sharing *neither* boundary are intentionally ignored —
+    ``None``. Junctions sharing *neither* boundary are intentionally ignored,
     relocating both ends to an unrelated junction is too aggressive (it stays
     ``NO_EVIDENCE`` and is flagged, not moved). ``junctions`` may be a list or a
     :class:`JunctionIndex` (identical result).
@@ -249,7 +249,7 @@ def classify_introns(
     """Classify each intron of ``transcript`` against the junction set.
 
     Returns a list (genomic-ascending intron order) of ``(status, junction)``:
-    ``SUPPORTED`` (matched), ``CONTRADICTED`` (one boundary off — junction is the
+    ``SUPPORTED`` (matched), ``CONTRADICTED`` (one boundary off, junction is the
     correction target), or ``NO_EVIDENCE`` (junction ``None``).
     """
     seqid, strand = transcript.seqid, transcript.strand
@@ -294,7 +294,7 @@ def apply_intron_corrections(
     * every exon ``>= MIN_EXON_BP``,
     * every intron ``>= MIN_INTRON_BP``.
 
-    Any failure — including a ``ValueError`` from model construction — reverts the
+    Any failure, including a ``ValueError`` from model construction, reverts the
     whole transaction by returning ``None``. The original
     transcript object is never modified.
     """
@@ -306,7 +306,7 @@ def apply_intron_corrections(
 
     for idx, new_donor, new_acceptor in corrections:
         if idx < 0 or idx + 1 >= n:
-            return None  # no such intron — revert
+            return None  # no such intron, revert
         bounds[idx] = (bounds[idx][0], new_donor)
         bounds[idx + 1] = (new_acceptor, bounds[idx + 1][1])
 
@@ -354,11 +354,11 @@ def _cds_introns_coherent(cds_segments: Any, exons: Any) -> bool:
     """True iff every CDS-derived intron coincides with an exon intron.
 
     CDS segments are stored one-per-exon (split at introns). The intron implied
-    between two consecutive CDS segments — ``(cds[i].end, cds[i+1].start)`` in the
-    0-based half-open convention — must equal a real exon intron
-    ``(exon[j].end, exon[j+1].start)``. When it does not — an *internal* CDS
+    between two consecutive CDS segments, ``(cds[i].end, cds[i+1].start)`` in the
+    0-based half-open convention, must equal a real exon intron
+    ``(exon[j].end, exon[j+1].start)``. When it does not, an *internal* CDS
     boundary (one facing an intron) sits inside an exon instead of on the splice
-    site — the CDS is not a valid spliced ORF: Mikado's transcript finalizer
+    site, the CDS is not a valid spliced ORF: Mikado's transcript finalizer
     derives a CDS intron that matches no exon intron and asserts
     ``len(cds_introns) > 0``. Terminal CDS boundaries (5'/3' UTR interior to the
     first/last coding exon) are unconstrained and never checked.
@@ -388,13 +388,13 @@ def _reattach_cds(
     exons (complete-ORF phase recompute) and coherence-checked again.
 
     A correction that *grows* an exon outward past a flush CDS boundary leaves the
-    CDS contained but no longer flush — its CDS-derived intron no longer matches
+    CDS contained but no longer flush, its CDS-derived intron no longer matches
     any exon intron. Re-clipping cannot fix that (clipping only removes intronic
     overhang, it never extends a segment to a moved boundary), so such a CDS is
     rejected as a structurally-invalid spliced ORF and the transcript is left
     CDS-less. A downstream backstop source (miniprot) may still rescue it; else
     ``validate`` flags the CDS-less gene. A flagged gene beats an incoherent one
-    (CLAUDE.md §6 — reject the source rather than emit CDS Mikado cannot finalize).
+    (CLAUDE.md §6, reject the source rather than emit CDS Mikado cannot finalize).
     """
     try:
         verbatim = attrs.evolve(
@@ -434,7 +434,7 @@ def refine_backstop_gene(
 
     ``stats`` (optional :class:`~helixforge.reconcile.runstats.RunStats`) records
     how many individual intron corrections were applied vs. reverted (per the
-    all-or-nothing transaction); observation only — it never changes the result.
+    all-or-nothing transaction); observation only, it never changes the result.
     """
     if gene.origin != "helixer_backstop":
         return gene
@@ -446,7 +446,7 @@ def refine_backstop_gene(
 
     # Junction-correct on a CDS-stripped copy: the model's own (Helixer-intrinsic)
     # CDS must not block a valid intron correction on CDS-containment (correct the
-    # structure first, then re-project the CDS — the documented order). The CDS is
+    # structure first, then re-project the CDS, the documented order). The CDS is
     # re-attached to the corrected exons at the end.
     saved_cds = transcript.cds
     saved_partial = transcript.cds_partial
@@ -463,7 +463,7 @@ def refine_backstop_gene(
             # Canonicity hard gate: this is the one place coordinates are
             # mutated, so a correction that
             # would relocate a splice site to a **non-canonical** motif is
-            # rejected outright — the intron stays uncorrected and is flagged. A
+            # rejected outright: the intron stays uncorrected and is flagged. A
             # junction whose motif was never evaluated (``canonical is None``,
             # e.g. no STAR motif / no genome) is accepted as before, keeping the
             # legacy path byte-identical.

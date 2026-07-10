@@ -5,7 +5,7 @@ Expand a command template over the plan → an executor-agnostic task file.
 Step 2 of the chunked path. Expands a command template over every chunk in
 plan.json; the default template is a per-chunk ``helixforge reconcile`` built
 from the inputs you attach, so it works out of the box. Run the resulting file
-with any executor — GNU parallel, a Slurm array, xargs, HyperShell — then
+with any executor (GNU parallel, a Slurm array, xargs, HyperShell), then
 ``parallel aggregate`` the per-chunk outputs.
 
 Template placeholders, substituted per chunk:

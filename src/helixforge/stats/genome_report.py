@@ -444,7 +444,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>HelixForge QC Report — {genome_name}</title>
+<title>HelixForge QC Report, {genome_name}</title>
 <style>
  body {{ font-family: system-ui, sans-serif; margin: 2rem; color: #222; max-width: 900px; }}
  h1 {{ margin-bottom: 0; }}

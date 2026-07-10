@@ -225,7 +225,7 @@ def install_scoring_profile(
 
     Resolves ``helixforge.plant.<profile>.yaml`` (or ``...yaml.template``) from
     the shipped package data via ``importlib.resources``. Validation checks the
-    file has the expected top-level sections — the full schema must still be
+    file has the expected top-level sections, the full schema must still be
     validated against the **pinned** Mikado version (see
     :func:`helixforge.prep.doctor.verify_emitted_config`).
     """

@@ -70,7 +70,7 @@ def _map_samples(
     """Run per-sample thunks serially or over a bounded thread pool (order kept).
 
     Each thunk wraps a subprocess wrapper (STAR/HISAT2/StringTie), which releases
-    the GIL inside ``subprocess.run`` — so a ``ThreadPoolExecutor`` gives real
+    the GIL inside ``subprocess.run``, so a ``ThreadPoolExecutor`` gives real
     concurrency without pickling the wrappers. ``ThreadPoolExecutor.map`` yields
     results in **input order**, so the returned BAM/SJ lists are deterministic
     regardless of which sample finishes first.
@@ -105,14 +105,14 @@ def prep_evidence(
     ``samtools_bin``, ``stringtie_bin``, ``miniprot_bin``.
 
     ``workers``: samples are independent jobs, so
-    with ``workers > 1`` the per-sample align + assemble run over a bounded pool —
+    with ``workers > 1`` the per-sample align + assemble run over a bounded pool,
     wall-time drops from ``Σ(sample_times)`` toward ``max(sample_times)``. It is a
     **concurrency budget**: each aligner is itself ``threads``-parallel, so size
     ``workers × threads`` to the node's cores. Default 1 keeps the serial order
     byte-identical. The shared genome index is always built once, before the pool.
 
     ``force``: when False (default), each stage whose output is
-    already present and up to date is skipped — a re-run of a long prep resumes
+    already present and up to date is skipped, a re-run of a long prep resumes
     instead of re-aligning every sample. ``force=True`` regenerates everything.
     """
     out_dir = Path(out_dir)
@@ -221,7 +221,7 @@ def prep_evidence(
             ),
         )
     else:
-        _log.info("prep: no RNA-seq reads — skipping align + assemble")
+        _log.info("prep: no RNA-seq reads, skipping align + assemble")
 
     miniprot_gff: Path | None = None
     if proteome:
@@ -237,7 +237,7 @@ def prep_evidence(
             ),
         )
     else:
-        _log.info("prep: no proteome — skipping miniprot")
+        _log.info("prep: no proteome, skipping miniprot")
 
     return PreppedInputs(
         genome_fasta=str(genome_fasta),

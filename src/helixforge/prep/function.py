@@ -54,7 +54,7 @@ def _norm(
 
 
 # ---------------------------------------------------------------------------
-# Parsers — tolerant, take a path, read tool output
+# Parsers: tolerant, take a path, read tool output
 # ---------------------------------------------------------------------------
 
 
@@ -71,7 +71,7 @@ def parse_interproscan_tsv(path: str | Path) -> dict[str, FunctionalRecord]:
     (optional, ``|``-separated). Missing optional fields are ``-`` or absent.
 
     ``domain_complete`` is set when any recognized domain's match span lies fully
-    within the protein (``1 <= start <= stop <= seq_len``) — the §2.2 signal that
+    within the protein (``1 <= start <= stop <= seq_len``), the §2.2 signal that
     the ORF brackets a complete domain rather than a truncated fragment.
     """
     by_tx: dict[str, dict[str, Any]] = {}
@@ -120,7 +120,7 @@ def parse_eggnog_annotations(path: str | Path) -> dict[str, FunctionalRecord]:
     column → ``Pfam:<name>`` ``dbxrefs``; the ``seed_ortholog`` (a UniProt/RefSeq
     accession) → a ``UniProt:`` Dbxref when present. eggNOG carries no per-domain
     coordinates, so ``domain_complete`` is True when the row reports at least one
-    Pfam family (a recognized domain) — a coarser signal than InterProScan's
+    Pfam family (a recognized domain), a coarser signal than InterProScan's
     coordinate-aware one, documented as such.
     """
     header: list[str] | None = None
@@ -166,7 +166,7 @@ def parse_eggnog_annotations(path: str | Path) -> dict[str, FunctionalRecord]:
 
 
 # ---------------------------------------------------------------------------
-# Run wrappers — build argv, invoke, return the output path
+# Run wrappers: build argv, invoke, return the output path
 # ---------------------------------------------------------------------------
 
 
@@ -256,7 +256,7 @@ def run_eggnog_mapper(
 
 
 # ---------------------------------------------------------------------------
-# annotate_function — the opt-in orchestrator
+# annotate_function: the opt-in orchestrator
 # ---------------------------------------------------------------------------
 
 
@@ -279,13 +279,13 @@ def annotate_function(
     **Off by default at the call site** (``enabled=False`` short-circuits to ``{}``
     and runs no subprocess) so the default/golden pipeline path is untouched.
     ``proteins_fa`` is the protein FASTA written upstream
-    (:func:`export.writers.write_protein_fasta`) — its headers are transcript ids,
+    (:func:`export.writers.write_protein_fasta`), its headers are transcript ids,
     so the returned records key on transcript id. ``tool`` ∈ :data:`FUNCTION_TOOLS`
     (``interproscan`` / ``eggnog`` / ``both``); with ``both`` the two records for a
     transcript are merged (union of terms; ``domain_complete`` OR-ed).
 
     ``genes`` is accepted for symmetry / future per-biotype scoping but is not
-    mutated here — this function only reads the proteins and returns metrics;
+    mutated here, this function only reads the proteins and returns metrics;
     structural attachment happens in the GFF3 writer and
     :func:`apply_domain_credibility` (count-neutral).
     """
@@ -345,7 +345,7 @@ def _merge_records(
 
 
 # ---------------------------------------------------------------------------
-# D2 — domain-completeness as a soft ORF-credibility signal
+# D2: domain-completeness as a soft ORF-credibility signal
 # ---------------------------------------------------------------------------
 
 
@@ -357,7 +357,7 @@ def apply_domain_credibility(
 
     A gene whose primary transcript spans a **complete recognized domain** is more
     credible than a bare ORF (§2.2). This records that as an INFO flag on the gene
-    — a soft, orthogonal credibility signal surfaced in QC reporting.
+a soft, orthogonal credibility signal surfaced in QC reporting.
 
     **Count-neutral**: it adds an INFO flag only; it never re-tiers, re-types,
     or re-calls a gene, and an empty

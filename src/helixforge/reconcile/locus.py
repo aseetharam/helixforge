@@ -1,4 +1,4 @@
-"""Helixer master locus list — the gene-set anchor."""
+"""Helixer master locus list: the gene-set anchor."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def load_helixer_loci(
 
     ``h5_path`` accepts any Helixer HDF5 half (combined, ``*_input.h5``, or
     ``*_predictions.h5``); ``input_h5`` names the metadata partner when
-    ``h5_path`` is a bare predictions half — see :func:`open_confidence_reader`.
+    ``h5_path`` is a bare predictions half, see :func:`open_confidence_reader`.
     """
     loci = GFF3Parser(gff3_path).parse_helixer_genes()
 
@@ -215,7 +215,7 @@ def filter_loci_by_region(
 def build_locus_index(loci: list[HelixerLocus]) -> IntervalIndex:
     """Flat ``IntervalIndex`` over all loci (data = original-list index).
 
-    Coordinate-only — the caller is responsible for single-scaffold use.
+    Coordinate-only, the caller is responsible for single-scaffold use.
     """
     idx = IntervalIndex()
     idx.add_intervals([(g.start, g.end, i) for i, g in enumerate(loci)])

@@ -1,0 +1,67 @@
+---
+title: 5. Gene prediction (Helixer)
+description: Run Helixer end to end, fasta2h5, HybridModel, helixer_post_bin, producing the GFF3 and the predictions H5 that reconcile refines.
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Helixer produces the backbone HelixForge refines: the gene models (`--helixer`) and the
+per-base confidence predictions (`--helixer-h5`). Run its three steps **separately** so the
+intermediate H5 files are preserved.
+
+<Aside type="caution" title="Keep the fasta2h5 step">
+The `fasta2h5.py` step is required, even though it is often commented out in copy-pasted
+scripts. It produces `*_input.h5`, which is consumed **twice downstream**: by
+`helixer_post_bin` (to write the GFF3) and by `reconcile --helixer-h5` (as the `*_input.h5`
+metadata sibling of `*_predictions.h5`). Skip it and reconcile cannot map confidence to
+coordinates.
+</Aside>
+
+## run_helixer.sh
+
+Reproduced verbatim, with its real parameters. Step 2 requires a **GPU** (`apptainer exec
+--nv`):
+
+```bash
+#!/bin/bash
+GENOME="/scratch/gilbreth/aseethar/helixer/Zm-B73-REFERENCE-NAM-5.0.fa"
+SIF="/scratch/gilbreth/aseethar/helixer/helixer-docker_helixer_v0.3.6_cuda_12.2.2-cudnn8_1.sif"
+SPECIES="Zea-mays-subsp-mays-B73"
+OUTDIR="helixer_output"
+MODEL_PATH="${HOME}/.local/share/Helixer/models/land_plant/land_plant_v0.3_a_0080.h5"
+mkdir -p ${OUTDIR}
+# Step 1: FASTA -> H5 (required; user had this commented but the H5 is needed downstream)
+apptainer exec ${SIF} fasta2h5.py --species ${SPECIES} --h5-output-path ${OUTDIR}/${SPECIES}_input.h5 --fasta-path ${GENOME}
+# Step 2: predictions (GPU)
+apptainer exec --nv ${SIF} HybridModel.py --load-model-path ${MODEL_PATH} --test-data ${OUTDIR}/${SPECIES}_input.h5 --prediction-output-path ${OUTDIR}/${SPECIES}_predictions.h5 --batch-size 8
+# Step 3: GFF3
+apptainer exec ${SIF} helixer_post_bin ${OUTDIR}/${SPECIES}_input.h5 ${OUTDIR}/${SPECIES}_predictions.h5 100 0.1 0.8 100 ${OUTDIR}/${SPECIES}_helixer.gff3
+```
+
+## What each step does
+
+| Step | Tool | Output | Used by |
+|---|---|---|---|
+| 1 | `fasta2h5.py` | `helixer_output/Zea-mays-subsp-mays-B73_input.h5` | step 3 + `reconcile` (metadata sibling) |
+| 2 | `HybridModel.py` (GPU) | `helixer_output/Zea-mays-subsp-mays-B73_predictions.h5` | step 3 + **`reconcile --helixer-h5`** |
+| 3 | `helixer_post_bin` | `helixer_output/Zea-mays-subsp-mays-B73_helixer.gff3` | **`reconcile --helixer`** |
+
+The four positional numbers to `helixer_post_bin` (`100 0.1 0.8 100`) are Helixer's
+post-processing parameters, window size, edge/peak thresholds, and minimum coding length,
+left exactly as the run used them.
+
+<Aside type="note" title="How reconcile finds both H5 halves">
+The tutorial passes `reconcile --helixer-h5 …_predictions.h5`. Its `…_input.h5` sibling is
+auto-detected in the same directory (`helixer_output/`), so you do not normally need
+`--helixer-input-h5`. Keep both files together.
+</Aside>
+
+## Feeds reconcile
+
+- `helixer_output/Zea-mays-subsp-mays-B73_helixer.gff3` → **`--helixer`**
+- `helixer_output/Zea-mays-subsp-mays-B73_predictions.h5` → **`--helixer-h5`**
+  (with its `_input.h5` sibling)
+
+Next: [reconcile everything →](/tutorial/reconcile/)

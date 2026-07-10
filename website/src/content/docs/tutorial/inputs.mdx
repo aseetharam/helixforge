@@ -1,0 +1,156 @@
+---
+title: 1. Inputs overview
+description: The maize B73 inputs, genome, 21 paired-end RNA-seq samples, and protein evidence, and which reconcile flag each file satisfies.
+sidebar:
+  order: 1
+---
+
+import { Aside, FileTree, Steps } from '@astrojs/starlight/components';
+
+This tutorial is a complete, end-to-end **maize *Zea mays* B73** walkthrough, written in
+the order data actually flows. Every command is the real command used to produce the
+[benchmarked annotation](/benchmarks/); parameters are not simplified.
+
+## What we are building
+
+A single `helixforge reconcile` run turns the B73 Helixer prediction into a tiered,
+isoform-aware annotation. It consumes three kinds of evidence, each prepared in its own
+step:
+
+<Steps>
+
+1. **Genome + Helixer prediction**, the backbone that reconciliation refines.
+2. **RNA-seq**, 21 paired-end B73 samples → STAR alignments (BAM + splice junctions) →
+   StringTie assemblies.
+3. **Protein homology**, a SwissProt-plants FASTA → a miniprot genome alignment, plus the
+   same FASTA as the DIAMOND database.
+
+</Steps>
+
+The remaining tutorial pages produce those inputs; this page maps each finished file to
+the `reconcile` flag it satisfies.
+
+## The inputs
+
+### Genome
+
+The B73 reference genome, NAM v5 assembly: `Zm-B73-REFERENCE-NAM-5.0.fa` (~2.4 Gb, 10
+chromosomes plus scaffolds). Index it once with `samtools faidx`.
+
+### RNA-seq: 21 paired-end B73 samples
+
+Each sample has `_R1.fq.gz` and `_R2.fq.gz` (150 bp paired-end). Sample IDs follow
+`B73_<stage>_<tissue>_<replicate>`:
+
+| Stage | Tissue | Sample IDs |
+|---|---|---|
+| 8 DAS | root | `B73_8DAS_root_MN01011`, `B73_8DAS_root_MN01012` |
+| 8 DAS | shoot | `B73_8DAS_shoot_MN01021`, `B73_8DAS_shoot_MN01022` |
+| V11 | base | `B73_V11_base_MN01031`, `B73_V11_base_MN01032` |
+| V11 | middle | `B73_V11_middle_MN01041`, `B73_V11_middle_MN01042`, `B73_V11_middle_MN01043` |
+| V11 | tip | `B73_V11_tip_MN01051`, `B73_V11_tip_MN01052` |
+| V18 | tassel | `B73_V18_tassel_MN01061`, `B73_V18_tassel_MN01062` |
+| V18 | ear | `B73_V18_ear_MN01071`, `B73_V18_ear_MN01072` |
+| R1 | anther | `B73_R1_anther_MN01081`, `B73_R1_anther_MN01082` |
+| 16 DAP | embryo | `B73_16DAP_embryo_MN01101`, `B73_16DAP_embryo_MN01102` |
+| 16 DAP | endosperm | `B73_16DAP_endosperm_MN01091`, `B73_16DAP_endosperm_MN01092` |
+
+<Aside type="caution" title="Library type: reverse-stranded (dUTP)">
+These libraries are **reverse-stranded (dUTP / first-strand)**. That fact propagates
+through the whole pipeline: STAR mapping is run **2-pass**, and StringTie is run with
+**`--rf`**. Get this wrong and strand-specific transcript assembly silently degrades.
+</Aside>
+
+Put the sample IDs in a `samples.txt` file, every downstream step loops over it:
+
+```text
+// samples.txt
+B73_8DAS_root_MN01011
+B73_8DAS_root_MN01012
+B73_8DAS_shoot_MN01021
+B73_8DAS_shoot_MN01022
+B73_V11_base_MN01031
+B73_V11_base_MN01032
+B73_V11_middle_MN01041
+B73_V11_middle_MN01042
+B73_V11_middle_MN01043
+B73_V11_tip_MN01051
+B73_V11_tip_MN01052
+B73_V18_tassel_MN01061
+B73_V18_tassel_MN01062
+B73_V18_ear_MN01071
+B73_V18_ear_MN01072
+B73_R1_anther_MN01081
+B73_R1_anther_MN01082
+B73_16DAP_embryo_MN01101
+B73_16DAP_embryo_MN01102
+B73_16DAP_endosperm_MN01091
+B73_16DAP_endosperm_MN01092
+```
+
+### Protein evidence
+
+A **single SwissProt-plants FASTA** feeds *both* protein inputs, there is no second
+protein source to find:
+
+- `utils fetch-db` downloads and formats it → `swissprot_plants/uniprot_sprot_plants.fasta`
+- `utils align` aligns it to the genome with miniprot → `Zm-B73-sw-plants-miniprot.gff3`
+- `reconcile` takes the **same FASTA** directly as `--protein-db`
+
+## Flag → file map
+
+Every `reconcile` input flag and the maize file that satisfies it. Each flag is confirmed
+against `helixforge reconcile --help` (see the [reconcile CLI reference](/cli/reconcile/)):
+
+| `reconcile` flag | File | Produced in |
+|---|---|---|
+| `--genome` | `genome/Zm-B73-REFERENCE-NAM-5.0.fa` | *(reference download)* |
+| `--helixer` | `helixer_output/Zea-mays-subsp-mays-B73_helixer.gff3` | [Step 5 · Helixer](/tutorial/helixer/) |
+| `--helixer-h5` | `helixer_output/Zea-mays-subsp-mays-B73_predictions.h5` | [Step 5 · Helixer](/tutorial/helixer/) |
+| `--stringtie-list` | `stringtie.fofn` | [Step 3 · StringTie](/tutorial/stringtie/) |
+| `--bam-list` | `bam.fofn` | [Step 2 · STAR](/tutorial/star/) |
+| `--star-sj-list` | `sj.fofn` | [Step 2 · STAR](/tutorial/star/) |
+| `--miniprot` | `Zm-B73-sw-plants-miniprot.gff3` | [Step 4 · Protein](/tutorial/protein/) |
+| `--protein-db` | `swissprot_plants/uniprot_sprot_plants.fasta` | [Step 4 · Protein](/tutorial/protein/) |
+
+<Aside type="note" title="Two protein flags, one FASTA">
+`--miniprot` supplies **backstop CDS only** and does *not* enable Mikado. `--protein-db`
+is what gates the Mikado reconciliation chain and isoform discovery. They are different
+flags, but in this tutorial they are both derived from the one SwissProt-plants FASTA, see
+[Step 4](/tutorial/protein/).
+</Aside>
+
+<Aside type="note" title="Why the H5 matters">
+`--helixer-h5` receives the `*_predictions.h5` softmax file; its `*_input.h5` metadata
+sibling is auto-detected from the same directory. Both come from the Helixer run, which is
+why [Step 5](/tutorial/helixer/) keeps the `fasta2h5` step that produces `*_input.h5`.
+</Aside>
+
+## Working directory
+
+By the end of the tutorial the working directory looks like this, the paths match the
+`reconcile` command verbatim:
+
+<FileTree>
+- maize_b73/
+  - helixforge.sif
+  - samples.txt
+  - genome/
+    - Zm-B73-REFERENCE-NAM-5.0.fa
+    - Zm-B73-REFERENCE-NAM-5.0.fa.fai
+  - star_index/ STAR genome index
+  - bam/ STAR outputs: per-sample BAM + SJ.out.tab
+  - stringtie/ per-sample StringTie GTFs
+  - helixer_output/
+    - Zea-mays-subsp-mays-B73_input.h5
+    - Zea-mays-subsp-mays-B73_predictions.h5
+    - Zea-mays-subsp-mays-B73_helixer.gff3
+  - swissprot_plants/
+    - uniprot_sprot_plants.fasta
+  - Zm-B73-sw-plants-miniprot.gff3
+  - bam.fofn
+  - sj.fofn
+  - stringtie.fofn
+</FileTree>
+
+Next: [align the RNA-seq reads with STAR →](/tutorial/star/)

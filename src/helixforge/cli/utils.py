@@ -1,4 +1,4 @@
-"""``helixforge utils`` — standalone data-prep and post-run utilities."""
+"""``helixforge utils``: standalone data-prep and post-run utilities."""
 
 from __future__ import annotations
 

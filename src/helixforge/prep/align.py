@@ -64,8 +64,8 @@ def build_star_index(
 ) -> Path:
     """``STAR --runMode genomeGenerate`` → the genome index dir (returned).
 
-    Skips the (expensive) build when the index already exists — STAR's
-    ``SAindex`` marker is fresher than the genome FASTA — unless ``force``.
+    Skips the (expensive) build when the index already exists, STAR's
+    ``SAindex`` marker is fresher than the genome FASTA, unless ``force``.
     """
     index_dir = Path(index_dir)
     if not force and output_is_fresh(index_dir / "SAindex", [genome_fasta]):

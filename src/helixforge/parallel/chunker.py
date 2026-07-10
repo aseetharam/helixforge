@@ -82,7 +82,7 @@ def _segment_scaffold(
     segment is "full" (``should_cut``), the segment already spans at least
     ``min_span_bp`` bp, **and** the gap to the next locus is ``>= min_boundary_gap``
     (so the cut lands in intergenic space). The genomic boundary is the gap
-    midpoint. A scaffold with no eligible gap stays one chunk — a gene is never
+    midpoint. A scaffold with no eligible gap stays one chunk, a gene is never
     split.
     """
     specs: list[ChunkSpec] = []
@@ -132,11 +132,11 @@ def plan_chunks(
     ``loci`` are v3 master Helixer loci; ``scaffold_lengths`` bounds the last
     region per scaffold. The four strategies match v1's vocabulary:
 
-    * ``scaffold`` — one chunk per scaffold; with ``max_chunk_size`` a long
+    * ``scaffold``, one chunk per scaffold; with ``max_chunk_size`` a long
       scaffold is split into ``~max_chunk_size`` bp pieces (cut in gaps).
-    * ``size`` — ``~chunk_size`` bp windows (default 10 Mb), cut in gaps.
-    * ``genes`` — ``chunk_size`` loci per chunk (default 100).
-    * ``adaptive`` — balance loci across ``~target_chunks`` chunks.
+    * ``size``, ``~chunk_size`` bp windows (default 10 Mb), cut in gaps.
+    * ``genes``, ``chunk_size`` loci per chunk (default 100).
+    * ``adaptive``, balance loci across ``~target_chunks`` chunks.
 
     Every cut respects ``min_boundary_gap`` so no gene is split; chunks are
     emitted in scaffold order. Scaffolds with no loci produce no chunk.
@@ -174,7 +174,7 @@ def plan_chunks(
     elif strategy is ChunkStrategy.BY_SIZE:
         should_cut = _cut_by_bp
         min_span = min(min_chunk_size, bp_per_chunk or min_chunk_size)
-    else:  # BY_GENES / ADAPTIVE — count-based, no bp floor
+    else:  # BY_GENES / ADAPTIVE, count-based, no bp floor
         should_cut = _cut_by_genes
         min_span = 0
 

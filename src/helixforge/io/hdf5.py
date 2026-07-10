@@ -108,7 +108,7 @@ def open_confidence_reader(
         pred = by_layout.get(LAYOUT_SPLIT_PREDICTIONS)
         if meta is not None and pred is not None:
             return HDF5ConfidenceReader.from_helixer_outputs(meta, pred)
-        # Not a clean metadata+predictions pair — fall through to single-path logic
+        # Not a clean metadata+predictions pair: fall through to single-path logic
         # (e.g. h5_path is already a combined file and input_h5 is redundant).
 
     if layout == LAYOUT_SPLIT_PREDICTIONS:

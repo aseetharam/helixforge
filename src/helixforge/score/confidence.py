@@ -142,7 +142,7 @@ def score_annotation(
     """Score every transcript of any GFF3 against the Helixer HDF5 prior.
 
     Returns a ``pandas.DataFrame`` with one row per transcript (columns
-    :data:`TSV_COLUMNS`). ``gff3_path`` need not be HelixForge output — it is
+    :data:`TSV_COLUMNS`). ``gff3_path`` need not be HelixForge output, it is
     parsed with ``GFF3Parser.parse_genes_generic`` so any GFF3 works. ``h5_path``
     may be a combined or a split (``*_input.h5``) Helixer file; the predictions
     half is auto-detected or given via ``predictions_h5``. ``region`` (1-based
