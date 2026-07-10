@@ -1,37 +1,9 @@
-"""Confidence scoring for gene models using Helixer predictions.
-
-This module implements multi-factor confidence scoring for gene predictions
-by aggregating per-base class probabilities from Helixer HDF5 output.
-
-The goal is to identify:
-- High-confidence gene models (ready for use)
-- Low-confidence models (need manual review or filtering)
-- Specific problematic regions within genes (weak exons, uncertain boundaries)
-
-Metrics implemented:
-- mean_prob: Mean probability of called class across gene
-- min_prob: Minimum probability (weakest point)
-- median_prob: Median probability
-- entropy: Shannon entropy (prediction uncertainty)
-- boundary_sharpness: Sharpness at exon/intron boundaries
-- coding_consistency: CDS frame consistency
-- exon_min: Worst exon score
-
-Example:
-    >>> from helixforge.core.confidence import ConfidenceCalculator
-    >>> from helixforge.io.hdf5 import HelixerHDF5Reader
-    >>> from helixforge.io.fasta import GenomeAccessor
-    >>> reader = HelixerHDF5Reader("predictions.h5", "genome.fa.fai")
-    >>> genome = GenomeAccessor("genome.fa")
-    >>> calc = ConfidenceCalculator(reader, genome)
-    >>> for gene in genes:
-    ...     score = calc.score_gene(gene)
-    ...     print(f"{gene.gene_id}: {score.overall_score:.3f} ({score.confidence_class})")
-"""
+"""Confidence scoring for gene models using Helixer predictions."""
 
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from enum import Enum
 from pathlib import Path
@@ -42,8 +14,8 @@ import numpy as np
 
 if TYPE_CHECKING:
     from helixforge.io.fasta import GenomeAccessor
-    from helixforge.io.gff import GeneModel
-    from helixforge.io.hdf5 import HelixerHDF5Reader
+    from helixforge.core.gff import GeneModel
+    from helixforge.core.hdf5 import HelixerHDF5Reader
 
 logger = logging.getLogger(__name__)
 
@@ -359,9 +331,7 @@ class ConfidenceCalculator:
             worst_exon_score = mean_prob
 
         # 5. Calculate boundary sharpness
-        boundary_sharpness = self._calculate_boundary_sharpness(
-            preds, exon_boundaries
-        )
+        boundary_sharpness = self._calculate_boundary_sharpness(preds, exon_boundaries)
 
         # 6. Calculate coding consistency
         coding_consistency = self._calculate_coding_consistency(
@@ -449,8 +419,7 @@ class ConfidenceCalculator:
                 for i in range(0, len(genes_list), chunk_size):
                     chunk = genes_list[i : i + chunk_size]
                     futures = {
-                        executor.submit(self.score_gene, gene): gene
-                        for gene in chunk
+                        executor.submit(self.score_gene, gene): gene for gene in chunk
                     }
 
                     for future in as_completed(futures):
@@ -494,7 +463,9 @@ class ConfidenceCalculator:
         Returns:
             RegionConfidence with per-base metrics.
         """
-        preds = self.hdf5_reader.get_predictions_for_region(seqid, start, end, strand=strand)
+        preds = self.hdf5_reader.get_predictions_for_region(
+            seqid, start, end, strand=strand
+        )
 
         per_base_entropy = self._calculate_entropy(preds)
         per_base_max_prob = np.max(preds, axis=1)
@@ -940,7 +911,11 @@ class ConfidenceWriter:
             f.write('track name="Low Confidence Regions" color="200,0,0"\n')
 
             for score in scores:
-                for region_start, region_end, region_score in score.low_confidence_regions:
+                for (
+                    region_start,
+                    region_end,
+                    region_score,
+                ) in score.low_confidence_regions:
                     bed_score = int(region_score * 1000)
                     name = f"{score.gene_id}_lcr"
 
@@ -950,6 +925,126 @@ class ConfidenceWriter:
                     )
 
         logger.info(f"Wrote low-confidence regions to {output_path}")
+
+
+# =============================================================================
+# Distribution summary  (standalone ``helixforge confidence`` summary stats)
+# =============================================================================
+
+# Per-gene component sub-scores reported in the summary, as
+# ``(attribute, display_label)``. These are the components that feed
+# ``overall_score`` and are exposed for inspection; ``per_exon`` is handled
+# separately (it aggregates the per-gene ``exon_scores`` list).
+SUMMARY_COMPONENTS: list[tuple[str, str]] = [
+    ("entropy", "entropy"),
+    ("boundary_sharpness", "boundary_sharpness"),
+    ("coding_consistency", "cds_consistency"),
+]
+
+# Percentiles reported over the overall confidence score.
+SUMMARY_PERCENTILES: list[int] = [5, 25, 50, 75, 95]
+
+
+def summarize_confidence_scores(
+    scores: Iterable["GeneConfidence"],
+) -> list[tuple[str, float | int | None]]:
+    """Distribution summary of overall confidence over a set of scored genes.
+
+    Returns an **ordered** list of ``(metric, value)`` pairs (long format, ready
+    for either an aligned screen table or a ``metric<TAB>value`` TSV). The
+    distribution stats over ``overall_score`` come first (``n``, ``mean``,
+    ``median``, ``std``, ``min``, ``max`` and the 5/25/50/75/95 percentiles),
+    then a mean/median/std triple for each per-gene component sub-score that is
+    present (entropy, boundary sharpness, CDS consistency, per-exon), then the
+    high/medium/low class counts.
+
+    The fixed class thresholds (0.85 = high) are miscalibrated across genomes, so
+    a healthy unimodal distribution can look like failure. These stats show the
+    actual shape of the data and let a user pick a genome-appropriate cutoff. An
+    empty score set yields ``n == 0`` and ``None`` for every distribution
+    statistic (class counts are ``0``).
+    """
+    scores = list(scores)
+    n = len(scores)
+    rows: list[tuple[str, float | int | None]] = [("n", n)]
+
+    if n == 0:
+        for label in ("mean", "median", "std", "min", "max"):
+            rows.append((label, None))
+        for pct in SUMMARY_PERCENTILES:
+            rows.append((f"p{pct}", None))
+        rows.extend([("n_high", 0), ("n_medium", 0), ("n_low", 0)])
+        return rows
+
+    overall = np.array([s.overall_score for s in scores], dtype=float)
+    rows.extend(
+        [
+            ("mean", float(np.mean(overall))),
+            ("median", float(np.median(overall))),
+            ("std", float(np.std(overall))),
+            ("min", float(np.min(overall))),
+            ("max", float(np.max(overall))),
+        ]
+    )
+    for pct in SUMMARY_PERCENTILES:
+        rows.append((f"p{pct}", float(np.percentile(overall, pct))))
+
+    # Per-gene component sub-scores: mean/median/std each.
+    for attr, label in SUMMARY_COMPONENTS:
+        vals = np.array([getattr(s, attr) for s in scores], dtype=float)
+        rows.extend(
+            [
+                (f"{label}_mean", float(np.mean(vals))),
+                (f"{label}_median", float(np.median(vals))),
+                (f"{label}_std", float(np.std(vals))),
+            ]
+        )
+
+    # Per-exon component: mean exon score per gene, over genes that have exons.
+    per_exon = [float(np.mean(s.exon_scores)) for s in scores if s.exon_scores]
+    if per_exon:
+        pe = np.array(per_exon, dtype=float)
+        rows.extend(
+            [
+                ("per_exon_mean", float(np.mean(pe))),
+                ("per_exon_median", float(np.median(pe))),
+                ("per_exon_std", float(np.std(pe))),
+            ]
+        )
+
+    classes = Counter(s.confidence_class for s in scores)
+    rows.extend(
+        [
+            ("n_high", int(classes.get("high", 0))),
+            ("n_medium", int(classes.get("medium", 0))),
+            ("n_low", int(classes.get("low", 0))),
+        ]
+    )
+    return rows
+
+
+def write_confidence_summary_tsv(
+    summary: list[tuple[str, float | int | None]],
+    output_path: Path | str,
+) -> Path:
+    """Write a :func:`summarize_confidence_scores` result as a long-format TSV.
+
+    Two tab-separated columns (``metric``, ``value``); floats are written with
+    six decimals, ints bare, and ``None`` as an empty value. Returns the path.
+    """
+    output_path = Path(output_path)
+    with open(output_path, "w") as f:
+        f.write("metric\tvalue\n")
+        for metric, value in summary:
+            if value is None:
+                rendered = ""
+            elif isinstance(value, float):
+                rendered = f"{value:.6f}"
+            else:
+                rendered = str(value)
+            f.write(f"{metric}\t{rendered}\n")
+    logger.info(f"Wrote confidence summary to {output_path}")
+    return output_path
 
 
 # =============================================================================
@@ -986,8 +1081,8 @@ def score_genes_from_files(
         List of GeneConfidence objects.
     """
     from helixforge.io.fasta import GenomeAccessor
-    from helixforge.io.gff import GFF3Parser
-    from helixforge.io.hdf5 import HelixerHDF5Reader
+    from helixforge.core.gff import GFF3Parser
+    from helixforge.core.hdf5 import HelixerHDF5Reader
 
     # Get FAI path
     fasta_path = Path(fasta_path)

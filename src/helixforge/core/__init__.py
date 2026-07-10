@@ -1,36 +1,15 @@
-"""Core refinement logic for HelixForge.
+"""Standalone confidence-scoring toolkit."""
 
-This module contains the fundamental algorithms and data structures
-for refining gene predictions:
-
-- Confidence scoring
-- Splice site analysis
-- Gene boundary refinement
-- RNA-seq evidence scoring
-- Merge/split detection
-
-Example:
-    >>> from helixforge.core.evidence import EvidenceScorer, EvidenceScorerConfig
-    >>> from helixforge.core.splice import SpliceRefiner
-"""
-
-from helixforge.core.evidence import (
-    EvidenceLevel,
-    EvidenceScore,
-    EvidenceScorer,
-    EvidenceScorerConfig,
-    ExonEvidence,
-    JunctionEvidence,
-    summarize_evidence_scores,
+from helixforge.core.confidence import (
+    ConfidenceCalculator,
+    ConfidenceWriter,
+    GeneConfidence,
+    RegionConfidence,
 )
 
-__all__: list[str] = [
-    # Evidence scoring
-    "EvidenceLevel",
-    "EvidenceScore",
-    "EvidenceScorer",
-    "EvidenceScorerConfig",
-    "ExonEvidence",
-    "JunctionEvidence",
-    "summarize_evidence_scores",
+__all__ = [
+    "ConfidenceCalculator",
+    "ConfidenceWriter",
+    "GeneConfidence",
+    "RegionConfidence",
 ]

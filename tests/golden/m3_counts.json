@@ -1,0 +1,58 @@
+{
+    "_comment": "Golden-output regression snapshot for the M3 resume run (CLAUDE.md regression gate). Captured from scripts/m3_run.py --resume on the validated A. thaliana set. Regenerate intentionally only when a documented change is meant to move these counts, via: /usr/bin/python3 scripts/m3_run.py --outdir m3_out  (then update this file + the inline asserts in tests/test_m3_golden.py and say so in the commit). HISTORY: Phase 29 strengthened the merge guard (merge 39->37; helixer_backstop 832->836; genes 27184->27186). Phase 30 typed every gene (biotype key) and demoted 154 Mikado-origin CDS-less genes out of CDS-tier 2. THE TPM/BIOTYPE/TE FIX (this snapshot) DELIBERATELY MOVES THESE COUNTS: biotype is now driven by the model's own ORF, not by the presence of evidence. Previously a Helixer-only (backstop) gene was rebuilt CDS-less and mis-typed lncRNA/ncRNA whenever it lacked expression+homology, so only miniprot-rescued genes were coding. The backstop transcript now carries the Helixer model's intrinsic CDS, so a gene with a complete ORF is protein_coding regardless of expression/homology. On TAIR10 this turns 803 of the 836 helixer_backstop genes coding: coding 26196->26999; biotype protein_coding 26196->26999, lncRNA 676->145, ncRNA_undetermined 314->42 (the 187 still-non-coding = 154 Mikado-origin CDS-less + 33 backstops whose intrinsic CDS could not survive junction-correction re-projection); tier 2 5565->6368 (CDS, no homology) and tier 3 990->187. tier1 unchanged at 20631 (backstops carry no homology, so they stop at Tier 2). genes/total_tx/multi/origin/AS/id_map-coverage UNCHANGED (no gene added or lost). Junction correction now runs on a CDS-stripped copy and re-projects the CDS onto the corrected exons (the documented 'correct first, then project CDS' order), so ALL_JUNCTIONS_SUPPORTED is unchanged at 517 despite the new intrinsic CDS. The 803 new CDS-bearing backstop genes are now evaluated by the read-only codon gate, raising structural flags: NO_STOP 288->1032 (HELIXER_ONLY models often lack a clean terminal stop), NO_START 2175->2180, SHORT_CDS 1261->1464, INTERNAL_STOP 0->1. NEW flag PUTATIVE_CODING=955 marks coding genes resting on the intrinsic ORF alone (no expression and no homology) \u2014 the coding call stands, the flag records that it is putative. The optional EDTA TE gate is OFF on this run (no --te-annotation), so TE_OVERLAP/transposable_element never appear. Exercised by tests/reconcile/test_mikado_integrate.py (intrinsic-CDS carry-through), test_biotype.py (putative coding), test_fallback.py (CDS does not block junction correction), test_pipeline_tpm.py (TPM parity), test_te.py (TE gating). MIKADO-COMPARE CDS-COHERENCE FIX (this snapshot): backstop junction correction re-attached the intrinsic Helixer CDS whenever it still fit inside the corrected exons, even when a correction had GROWN an exon past a flush CDS boundary \u2014 stranding that boundary inside the exon so its CDS-derived intron matched no exon intron. Mikado's transcript finalizer asserts len(cds_introns) > 0 and crashed `mikado compare` on such output (85 backstop transcripts on TAIR10, 29 of them fatal). reconcile/fallback.py now coherence-checks the re-attached CDS (every CDS-derived intron must coincide with an exon intron) and, when re-projection cannot restore it, rejects the intrinsic ORF and leaves the transcript CDS-less (a flagged gene beats an incoherent one, CLAUDE.md \u00a76). This deliberately moves the 85 stranded backstops out of coding: coding 26999->26914; tier 2 6368->6283, tier 3 187->272; biotype protein_coding 26999->26914 (lncRNA 145->204, ncRNA_undetermined 42->68); flags NO_STOP 282->278, SHORT_CDS 1421->1391. genes/total_tx/multi/origin/AS/id_map-coverage/tier1 and every junction flag UNCHANGED (correction still runs on the CDS-stripped copy; only the CDS re-attach decision changed). NOTE: this regeneration also refreshes NO_STOP (prev-recorded 1032) and SHORT_CDS (prev-recorded 1464) to the current codon-gate output on the working tree \u2014 those two flag counts had drifted from an earlier snapshot independently of this fix. `mikado compare` now runs clean on the full (non-CDS-stripped) output. Exercised by tests/reconcile/test_fallback.py (outward-grow drop / inward-shrink keep, both strands) and tests/io/test_gff.py (written coding CDS is finalizer-safe).",
+    "summary": {
+        "genes": 27186,
+        "total_tx": 34767,
+        "multi": 4536,
+        "coding": 26914,
+        "tier": {
+            "1": 20631,
+            "2": 6283,
+            "3": 272
+        },
+        "origin": {
+            "helixer_backstop": 836,
+            "merge": 37,
+            "mikado_1to1": 26263,
+            "split": 50
+        },
+        "biotype": {
+            "lncRNA": 204,
+            "ncRNA_undetermined": 68,
+            "protein_coding": 26914
+        },
+        "as_kinds": {
+            "A3": 4440,
+            "A5": 2824,
+            "ALT_TES": 247,
+            "ALT_TSS": 664,
+            "ES": 1172,
+            "IR": 470,
+            "MX": 532
+        },
+        "flags": {
+            "ALL_JUNCTIONS_SUPPORTED": 517,
+            "AS_A3": 3228,
+            "AS_A5": 2143,
+            "AS_ALT_TES": 230,
+            "AS_ALT_TSS": 605,
+            "AS_ES": 948,
+            "AS_IR": 356,
+            "AS_MX": 274,
+            "HELIXER_ONLY": 836,
+            "INTERNAL_STOP": 1,
+            "LOCUS_MERGE": 37,
+            "LOCUS_SPLIT": 50,
+            "MERGE_REJECTED": 74,
+            "NO_JUNCTION_SUPPORT": 104,
+            "NO_START": 2180,
+            "NO_STOP": 278,
+            "PARTIAL_JUNCTION_SUPPORT": 188,
+            "PARTIAL_ORF": 1234,
+            "PUTATIVE_CODING": 955,
+            "SHORT_CDS": 1391,
+            "SHORT_EXON": 1165
+        }
+    },
+    "id_map_loci": 27198
+}

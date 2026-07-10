@@ -1,0 +1,79 @@
+# HelixForge permissive (high-recall) Mikado scoring profile — TEMPLATE.
+#
+# Relaxed variant of the strict profile: lower entry thresholds, more lenient
+# isoform admission, weaker fragment pruning.  Use when maximising isoform
+# recall matters more than precision (e.g. poorly-assembled species, low-depth
+# RNA-seq, or exploratory annotation).
+#
+# See helixforge.plant.strict.yaml.template for schema notes and version caveats.
+
+# ---------------------------------------------------------------------------
+# Hard locus-entry requirements (relaxed vs strict).
+# ---------------------------------------------------------------------------
+requirements:
+  expression:
+    - ((exon_num.multi and (cdna_length.multi or combined_cds_length.multi)) or (exon_num.mono and combined_cds_length.mono))
+  parameters:
+    cdna_length.mono: {operator: ge, value: 150}
+    cdna_length.multi: {operator: ge, value: 200}
+    combined_cds_length.mono: {operator: ge, value: 100}
+    combined_cds_length.multi: {operator: ge, value: 100}
+    exon_num.mono: {operator: eq, value: 1}
+    exon_num.multi: {operator: gt, value: 1}
+
+# ORF coherence (same floor as strict — below 100 aa is noise).
+cds_requirements:
+  expression:
+    - combined_cds_length
+  parameters:
+    combined_cds_length: {operator: ge, value: 100}
+
+# ---------------------------------------------------------------------------
+# Alternative-splicing admission (permissive: wider UTR, no junction gate).
+# ---------------------------------------------------------------------------
+as_requirements:
+  expression:
+    - cdna_length and three_utr_length and five_utr_length and utr_length
+  parameters:
+    cdna_length: {operator: ge, value: 150}
+    utr_length: {operator: le, value: 3500}
+    five_utr_length: {operator: le, value: 3500}
+    three_utr_length: {operator: le, value: 3500}
+
+# Fragment detection (relaxed thresholds).
+not_fragmentary:
+  expression:
+    - ((exon_num.multi and (combined_cds_length.multi)) or (exon_num.mono and combined_cds_length.mono))
+  parameters:
+    exon_num.mono: {operator: eq, value: 1}
+    exon_num.multi: {operator: gt, value: 1}
+    combined_cds_length.mono: {operator: gt, value: 200}
+    combined_cds_length.multi: {operator: gt, value: 150}
+
+# ---------------------------------------------------------------------------
+# Scoring metrics (same structure, same weights as strict).
+# ---------------------------------------------------------------------------
+scoring:
+  proportion_verified_introns_inlocus: {rescaling: max, multiplier: 4}
+  verified_introns_num: {rescaling: max, multiplier: 2}
+  non_verified_introns_num: {rescaling: min, multiplier: 2}
+
+  combined_cds_length: {rescaling: max, multiplier: 3}
+  selected_cds_fraction: {rescaling: max, multiplier: 2}
+  cds_not_maximal: {rescaling: min, multiplier: 1}
+  cds_not_maximal_fraction: {rescaling: min, multiplier: 1}
+  five_utr_length: {rescaling: target, value: 200, multiplier: 1}
+  three_utr_length: {rescaling: target, value: 400, multiplier: 1}
+  end_distance_from_junction: {rescaling: min, multiplier: 1}
+
+  retained_intron_num: {rescaling: min, multiplier: 3}
+  retained_fraction: {rescaling: min, multiplier: 2}
+
+  exon_num: {rescaling: max, multiplier: 1, filter: {operator: ge, value: 1}}
+  canonical_intron_proportion: {rescaling: max, multiplier: 2}
+
+  blast_score: {rescaling: max, multiplier: 3}
+
+  external.helixer_support: {rescaling: max, multiplier: 3}
+  external.helixer_locus_conf: {rescaling: max, multiplier: 1}
+  external.tpm: {rescaling: max, multiplier: 2}

@@ -1,0 +1,15 @@
+#The selected clade was Brassicales (NCBI taxid 3699)
+#Number of conserved HOGs: 14492
+#Results on the completeness of the proteome:
+Single:[S:90.40%, 13102]
+Duplicated:[D:5.10%, 739]
+   Unexpected:[U:1.10%, 159]
+   Expected:[E:4.00%, 580]
+Missing:[M:4.50%, 651]
+#Results on the consistency of all the proteins in the proteome:
+Consistent:[C:85.00%, 41000]
+   Partial Hits:[P:6.00%, 2900]
+   Fragmented:[F:3.00%, 1450]
+Inconsistent:[I:10.00%, 4800]
+Contaminants:[T:0.00%, 0]
+Unknown:[U:5.00%, 2400]

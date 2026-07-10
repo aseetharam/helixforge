@@ -1,104 +1,127 @@
-"""Parallelization utilities for HelixForge.
+"""Large-genome scatter-gather.
 
-This module provides tools for parallel execution of HelixForge operations:
+Partition a genome into gene-safe region chunks (a gene is never split across a
+boundary), reserve each chunk a disjoint HFG id range so the gathered annotation
+has globally-unique, rerun-stable ids, run the chunks (local pool or a Slurm
+array), then aggregate and optionally boundary-stitch back into one annotation.
 
-- Genome chunking for parallel processing
-- Local multiprocessing execution
-- Task file generation for HyperShell/GNU Parallel
-- Memory monitoring
+Two entry surfaces onto the same primitives:
 
-For HPC clusters, the recommended approach is:
-1. Create a chunk plan with GenomeChunker
-2. Generate a task file with TaskGenerator
-3. Execute with HyperShell or GNU Parallel
+- ``reconcile --scatter`` (one command, single host or Slurm) → :func:`run_genome`.
+- the ``parallel`` command group (scheduler-agnostic four steps):
+  ``suggest`` (:func:`suggest_plan`) → ``plan`` (:func:`partition_by_strategy` /
+  :func:`partition_genome` + :func:`reserve_id_ranges`) → ``tasks``
+  (:func:`generate_task_file` / :func:`default_reconcile_template`) → run with any
+  executor (GNU parallel / xargs / Slurm array / HyperShell — see
+  :func:`generate_hypershell_command`) → ``aggregate`` (:func:`aggregate`).
 
-Example:
-    >>> from helixforge.parallel import GenomeChunker, ChunkStrategy, TaskGenerator
-    >>> chunker = GenomeChunker(genome)
-    >>> plan = chunker.create_plan(ChunkStrategy.BY_SCAFFOLD)
-    >>> gen = TaskGenerator(plan)
-    >>> task_file = gen.generate(
-    ...     command_template="helixforge confidence -p predictions.h5 -g genes.gff3 --genome genome.fa --chunk-id {chunk_id} -o out/{chunk_id}.tsv",
-    ...     output_path="tasks.txt",
-    ... )
-    >>> # Execute with: hs cluster tasks.txt --num-tasks 32
+This module re-exports the public surface of its submodules for convenience; the
+submodules remain the canonical import path.
 """
 
+from helixforge.constants import (
+    PLAN_DEFAULT_MIN_BOUNDARY_GAP as DEFAULT_MIN_BOUNDARY_GAP,
+)
+from helixforge.parallel.aggregate import (
+    AggregateResult,
+    aggregate,
+    prefixes_from_pattern,
+)
 from helixforge.parallel.chunker import (
-    ChunkPlan,
+    DEFAULT_GENES_PER_CHUNK,
+    DEFAULT_MIN_CHUNK_BP,
+    DEFAULT_SIZE_CHUNK_BP,
+    ChunkSpec,
     ChunkStrategy,
-    GenomicChunk,
-    GenomeChunker,
-    Chunker,  # Legacy alias
-    merge_overlapping_results,
-    suggest_chunk_parameters,
+    plan_chunks,
 )
-
-from helixforge.parallel.executor import (
-    ExecutorBackend,
-    ExecutionStats,
-    MemoryMonitor,
-    MemoryStats,
-    ParallelExecutor,
-    TaskResult,
-    ChunkProcessor,
-    Executor,  # Legacy alias
-    get_memory_stats,
-    get_optimal_workers,
-    track_memory,
+from helixforge.parallel.plan import (
+    Chunk,
+    Plan,
+    partition_by_strategy,
+    partition_genome,
+    read_plan,
+    reserve_id_ranges,
+    write_plan,
 )
-
+from helixforge.parallel.hypershell_backend import (
+    run_hypershell,
+    write_hypershell_plan,
+)
+from helixforge.parallel.run import RunResult, run_genome
+from helixforge.parallel.stitch import (
+    GeneSpan,
+    boundary_stitch,
+    find_boundary_merge_candidates,
+)
+from helixforge.parallel.suggest import GenomeStats, Suggestion, suggest_plan
 from helixforge.parallel.taskgen import (
     TaskFile,
-    TaskGenerator,
-    format_command,
-    generate_simple_task_file,
     estimate_parallelism,
+    format_command,
     generate_hypershell_command,
-)
-
-from helixforge.parallel.slurm import (
-    detect_slurm_environment,
-    is_slurm_job,
-    get_slurm_task_id,
-    get_slurm_resources,
-    get_chunk_for_task,
+    generate_task_file,
+    get_optimal_workers,
     write_example_sbatch,
+)
+from helixforge.parallel.tasks import (
+    build_chunk_configs,
+    default_reconcile_template,
+    pipeline_config_to_reconcile_argv,
+    run_chunk,
+    run_local,
+    write_shell_driver,
+    write_slurm_array,
 )
 
 __all__ = [
-    # Chunking
-    "ChunkPlan",
+    # Planning / partitioning
+    "Chunk",
+    "Plan",
+    "partition_genome",
+    "partition_by_strategy",
+    "reserve_id_ranges",
+    "write_plan",
+    "read_plan",
+    "DEFAULT_MIN_BOUNDARY_GAP",
+    # Chunking strategies
     "ChunkStrategy",
-    "GenomicChunk",
-    "GenomeChunker",
-    "Chunker",
-    "merge_overlapping_results",
-    "suggest_chunk_parameters",
-    # Execution
-    "ExecutorBackend",
-    "ExecutionStats",
-    "MemoryMonitor",
-    "MemoryStats",
-    "ParallelExecutor",
-    "TaskResult",
-    "ChunkProcessor",
-    "Executor",
-    "get_memory_stats",
-    "get_optimal_workers",
-    "track_memory",
-    # Task Generation (HyperShell/GNU Parallel)
+    "ChunkSpec",
+    "plan_chunks",
+    "DEFAULT_SIZE_CHUNK_BP",
+    "DEFAULT_GENES_PER_CHUNK",
+    "DEFAULT_MIN_CHUNK_BP",
+    # Per-chunk config + dispatch
+    "build_chunk_configs",
+    "pipeline_config_to_reconcile_argv",
+    "default_reconcile_template",
+    "write_slurm_array",
+    "write_shell_driver",
+    "run_chunk",
+    "run_local",
+    # Executor-agnostic task files
     "TaskFile",
-    "TaskGenerator",
     "format_command",
-    "generate_simple_task_file",
-    "estimate_parallelism",
+    "generate_task_file",
     "generate_hypershell_command",
-    # SLURM Utilities (minimal)
-    "detect_slurm_environment",
-    "is_slurm_job",
-    "get_slurm_task_id",
-    "get_slurm_resources",
-    "get_chunk_for_task",
+    "estimate_parallelism",
+    "get_optimal_workers",
     "write_example_sbatch",
+    # Whole-genome driver
+    "RunResult",
+    "run_genome",
+    # HyperShell execution backend
+    "run_hypershell",
+    "write_hypershell_plan",
+    # Aggregation + boundary stitch
+    "AggregateResult",
+    "aggregate",
+    "prefixes_from_pattern",
+    "GeneSpan",
+    "find_boundary_merge_candidates",
+    "boundary_stitch",
+    # Suggestion
+    "GenomeStats",
+    "Suggestion",
+    "suggest_plan",
 ]

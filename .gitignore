@@ -1,149 +1,100 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
-
-# Translations
-*.mo
-*.pot
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# Environments
-.env
-.venv
-env/
+.eggs/
+build/
+dist/
+.venv/
 venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
+.pytest_cache/
+.coverage
+htmlcov/
 .mypy_cache/
-.dmypy.json
-dmypy.json
+.ruff_cache/
 
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Bioinformatics files
-*.h5
-*.hdf5
-*.bam
-*.bai
-*.sam
+# Bioinformatics data / large artifacts (never commit)
 *.fa
 *.fasta
 *.fai
+*.fa.gz
+*.fasta.gz
 *.gff
 *.gff3
 *.gtf
+*.bam
+*.bai
+*.cram
+*.sam
 *.bed
-*.vcf
-*.vcf.gz
-*.vcf.gz.tbi
-
-# Large data directories
-output/
-results/
-temp/
-tmp/
-
-# Logs
-*.log
-logs/
-
-# Database files
+*.bigBed
+*.bw
+*.bigWig
+*.h5
+*.hdf5
 *.db
 *.sqlite
-*.sqlite3
-CLAUDE.md
-helixer_output/
+*.vcf
+*.vcf.gz
+
+# Mikado / tool run dirs
+mikado_prep/
+mikado_ser/
+mikado_pick/
+portcullis_out/
+*.transdecoder_dir/
+*.transdecoder.*
+pipeliner.*.cmds
+
+# Real-data test set and M2/M3 run outputs (never commit — large / real biology)
+helixforge_testing/
+m2_out/
+m3_out/
+
+# Keep small test fixtures that are generated in code, not committed binaries.
+# If you must commit a tiny fixture, put it under tests/ and force-add it:
+#   git add -f tests/data/tiny.gff3
+!tests/**/*.gff3
+!tests/**/*.gtf
+
+# v4 / poster generated outputs, benchmarks, ablations, and tool downloads
+# (never commit — multi-GB generated artifacts) EXCEPT the small result tables the
+# poster docs/figures trace to (CLAUDE.md §16 F3: numbers regenerate from committed files).
+ablation_out/*
+!ablation_out/ablation.tsv
+bench_out/*
+!bench_out/benchmark.tsv
+!bench_out/iso_trace.result.json
+!bench_out/iso_noTRACE.result.json
+bench_out_m7a/*
+!bench_out_m7a/results_gffcompare_mikado_compare_compleasm_both.tsv
+m3_out_trace/
+m3_out_trace*/
+m5_out/
+scale/
+realize_function/
+realize_function_mock/
+realize_miniprot/
+realize_ncrna/
+realize_organellar/
+agat_log_athaliana/
+busco_downloads/
+mb_downloads/
+milestone_runs/milestone_*/
+milestone_runs/*.log
+milestone_runs/*.out
+milestone_runs/*.grid.txt
+*.run.log
+/ablation_out_run.log
+/confidence.tsv
+/evidence.tsv
+/evidence_cram.tsv
+/current_treee.txt
+/stringtie_list.txt
+*.crai
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
