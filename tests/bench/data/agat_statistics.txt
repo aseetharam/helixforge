@@ -1,0 +1,27 @@
+--------------------------------------------------------------------------------
+
+                               Compute mrna with isoforms
+
+--------------------------------------------------------------------------------
+
+Number of gene                              27184
+Number of mrna                              34765
+Number of mrnas with utr both sides         12000
+Number of mrnas with at least one utr       20000
+Number of cds                               34000
+Number of exon                              180000
+Number of intron                            145000
+Number of exon in cds                       170000
+Number gene overlapping                     50
+Number of single exon gene                  3000
+Number of single exon mrna                  3200
+mean mrnas per gene                         1.3
+mean cdss per mrna                          1.0
+mean exons per mrna                         5.2
+mean introns in cdss per mrna               4.2
+Total gene length (bp)                      90000000
+Total cds length (bp)                       42000000
+mean gene length (bp)                       3311
+mean cds length (bp)                        1235
+mean exon length (bp)                       250
+Longest gene (bp)                           31000

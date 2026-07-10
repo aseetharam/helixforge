@@ -1,0 +1,22 @@
+# gffcompare v0.12.6 | Command line was:
+#gffcompare -r araport11.gff3 -o cmp helixforge.gtf
+#
+#= Summary for dataset: helixforge.gtf
+#     Query mRNAs :   34765 in  27184 loci  (28000 multi-exon transcripts)
+#            (4536 multi-transcript loci, ~1.3 transcripts per locus)
+# Reference mRNAs :   48359 in  27416 loci  (40000 multi-exon)
+# Super-loci w/ reference transcripts:    26000
+#-----------------| Sensitivity | Precision  |
+        Base level:    78.3     |    85.2     |
+        Exon level:    65.1     |    70.4     |
+      Intron level:    85.4     |    88.9     |
+Intron chain level:    55.2     |    60.1     |
+  Transcript level:    60.2     |    64.4     |
+       Locus level:    70.5     |    72.1     |
+
+     Matching intron chains:   22000
+       Matching transcripts:   21000
+              Matching loci:   19000
+
+          Missed exons:    5000/180000  (  2.8%)
+           Novel exons:    3000/175000  (  1.7%)

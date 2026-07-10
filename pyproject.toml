@@ -1,127 +1,115 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "helixforge"
-version = "0.1.0-alpha"
-description = "A modular toolkit for refining Helixer gene predictions into publication-quality annotations"
-readme = "README.md"
-license = {text = "MIT"}
-authors = [
-    {name = "Arun Seetharam"}
-]
+version = "4.0.0.dev0"
+description = "Isoform-aware refinement of Helixer annotations via Mikado reconciliation"
 requires-python = ">=3.10"
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Bio-Informatics",
-]
-keywords = ["bioinformatics", "genomics", "gene-prediction", "annotation", "helixer"]
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Arun Seetharam" }]
 
+# Core deps. Phases add to this list ONLY when a module actually imports the package.
+# Phase 0 needs: attrs, numpy, ncls. Phases 1-2 add pyfaidx, gffutils, h5py, pysam.
+# Phase 9 adds pandas (lazy — stays an extra). Phase 10 adds matplotlib, plotly,
+# dna-features-viewer (all lazy — extras). Phase 11 adds click.
+#
+# CLI runtime essentials live in BASE: the console script (helixforge.cli:main)
+# imports ``click`` at module top level, and every command renders results via
+# ``rich``. They were previously in the optional ``cli`` extra, so a base
+# ``pip install .`` produced a ``helixforge`` that crashed on a missing import.
+# ``pandas`` is never imported at module load (only lazily, e.g. ConfidenceWriter
+# .to_dataframe / stats tables) so it stays optional.
+# Mikado / Portcullis / TransDecoder / DIAMOND are EXTERNAL tools, never pip deps here.
 dependencies = [
-    "h5py>=3.8",
-    "pysam>=0.21",
+    "attrs>=23.0",
+    "numpy>=1.24",
+    "ncls>=0.0.68",
     "pyfaidx>=0.7",
     "gffutils>=0.12",
-    "numpy>=1.24",
-    "pandas>=2.0",
-    "scipy>=1.10",
-    "matplotlib>=3.7",
-    "plotly>=5.14",
-    "jinja2>=3.1",
+    "h5py>=3.8",
+    "pysam>=0.21",
     "click>=8.1",
     "rich>=13.0",
-    "attrs>=23.0",
 ]
 
 [project.optional-dependencies]
-interactive = [
-    "dash>=2.10",
-    "panel>=1.0",
-]
+# Phase 2: optional bigWig coverage support (BAM module works without it).
+bigwig = ["pyBigWig>=0.3"]
+# Phase 9: tidy stats tables (exporters stay dependency-light, plain-text writers).
+stats = ["pandas>=2.0"]
+# Phase 10: visualization (all imported lazily — core installs without them).
+viz = ["matplotlib>=3.7", "plotly>=5.18", "dna-features-viewer>=3.1"]
+tracks = ["pyBigWig>=0.3"]
+# HyperShell distributed execution backend (`reconcile --hpc hypershell`). The
+# backend drives `hs` as a subprocess, so this extra only needs to put the CLI on
+# PATH; core install stays HyperShell-free (and Python-3.10 compatible — this
+# extra pulls Python >=3.11 via HyperShell). Not imported anywhere in core.
+hpc = ["hypershell>=2.8.1"]
+# Phase 11: CLI + benchmarking harness (benchmarking tools are EXTERNAL — subprocess).
+cli = ["click>=8.1", "rich>=13.0", "pandas>=2.0"]
 dev = [
-    "pytest>=7.3",
-    "pytest-cov",
-    "pre-commit",
-    "ruff",
-    "mypy",
-    "memory-profiler",
-]
-docs = [
-    "mkdocs-material",
-    "mkdocstrings[python]",
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    # Phase 19 D4: static type-check baseline (non-strict; Phase 25 turns on strict).
+    "mypy>=1.8",
 ]
 
 [project.scripts]
 helixforge = "helixforge.cli:main"
 
-[project.urls]
-Homepage = "https://github.com/aseetharam/helixforge"
-Documentation = "https://github.com/aseetharam/helixforge#readme"
-Repository = "https://github.com/aseetharam/helixforge"
-Issues = "https://github.com/aseetharam/helixforge/issues"
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.ruff]
-line-length = 100
-target-version = "py310"
-
-[tool.ruff.lint]
-select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # Pyflakes
-    "I",      # isort
-    "B",      # flake8-bugbear
-    "C4",     # flake8-comprehensions
-    "UP",     # pyupgrade
-    "ARG",    # flake8-unused-arguments
-    "SIM",    # flake8-simplify
-]
-ignore = [
-    "E501",   # line too long (handled by formatter)
-    "B008",   # do not perform function calls in argument defaults
-    "B905",   # zip without explicit strict parameter
-]
-
-[tool.ruff.lint.isort]
-known-first-party = ["helixforge"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-skip-magic-trailing-comma = false
-line-ending = "auto"
-
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-ignore_missing_imports = true
+# Phase 23 D5 (§3.5): ship the Mikado scoring templates as package data so they
+# resolve via importlib.resources in an installed wheel — not a fragile
+# parents[3]/docs path. mikado/config.py falls back to docs/scoring for a source
+# checkout, but the installed package carries its own copy.
+[tool.setuptools.package-data]
+helixforge = ["data/scoring/*.yaml", "data/scoring/*.yaml.template"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_functions = ["test_*"]
-addopts = "-v --tb=short"
-
-[tool.coverage.run]
-source = ["src/helixforge"]
-branch = true
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise NotImplementedError",
-    "if TYPE_CHECKING:",
+# Phase 21 D4 (M8): the perf-regression test is opt-in. ``-m 'not slow'``
+# deselects it from the default `pytest tests/` run so the suite stays fast; run
+# it explicitly with `pytest tests/perf -q -m slow` (CLI ``-m`` overrides this).
+addopts = "-ra -m 'not slow'"
+markers = [
+    "slow: opt-in performance / scale regression test (Phase 21 M8 envelope)",
+    # Phase 25 D1 (M5 complement): real-tool integration smoke. These do NOT need a
+    # deselect in ``addopts`` — every test self-skips via ``shutil.which`` when its
+    # binary is absent, so a toolless CI / dev box stays fast + green. The marker is
+    # only for explicit selection (``pytest -m integration`` / ``-m 'not integration'``).
+    "integration: opt-in real-tool smoke test (skips cleanly when the tool is absent)",
 ]
+
+# Phase 25 D4 (M10): strict static checking on the whole package, wired into CI
+# via the ``dev`` extra. The Phase-19 non-strict baseline (13 errors in
+# mikado_integrate) is driven to **zero** here; ``mypy --strict src/helixforge``
+# (i.e. bare ``mypy`` reading this config) must exit clean. Missing third-party
+# stubs are tolerated via ``ignore_missing_imports``; any remaining unavoidable
+# gap uses a *targeted* ``# type: ignore[code]  # reason`` (never a blanket one —
+# see tests/test_typing.py::test_no_blanket_type_ignores).
+[tool.mypy]
+python_version = "3.10"
+files = ["src/helixforge"]
+strict = true
+ignore_missing_imports = true
+
+# The ``core`` package is the v1 confidence scorer ported **verbatim** (the
+# ``confidence`` CLI command — copy, do not redesign). Its numpy/h5py-heavy I/O
+# predates v3's strict-typing baseline (M10) and is held to v1's looser bar, not
+# the strict gate that governs v3-authored pipeline code. Relax only the few
+# error codes that arise from the faithful copy (Any leaking out of numpy/h5py,
+# untyped dict literals, sentinel ``None`` initialisers). ``core.regions`` is NOT
+# listed — its one real v3-glue fix (GenomeAccessor API) is corrected in-place.
+[[tool.mypy.overrides]]
+module = [
+    "helixforge.core.confidence",
+    "helixforge.core.gff",
+    "helixforge.core.hdf5",
+    "helixforge.core.plots",
+]
+disable_error_code = ["no-any-return", "type-arg", "var-annotated", "assignment"]

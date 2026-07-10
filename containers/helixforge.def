@@ -1,0 +1,115 @@
+Bootstrap: docker
+From: mambaorg/micromamba:1.5.8
+
+# =============================================================================
+# HelixForge v3 — reproducibility image (Phase 18 D4)
+#
+# Locks the EXACT working CPU toolchain from docs/EXTERNAL_TOOLS.md (the single
+# source of truth for versions). The reconciliation stack is version-fragile —
+# Mikado 2.x needs the OLD pandas/SQLAlchemy API — so each tool group lives in
+# its own conda env to keep the pins isolated, and every env's bin dir is put on
+# PATH so `helixforge doctor` resolves all of them by their bare command names.
+#
+#   helixforge-env : the helixforge package + CLI/stats deps (pandas >= 2 is fine
+#                    here — helixforge never runs Mikado in-process)
+#   mikado-env     : mikado 2.3.4 + pandas 1.5.3 + sqlalchemy 1.4.49 +
+#                    transdecoder + diamond + portcullis  (the fragile reconcile
+#                    stack — pandas MUST be 1.5.3 or `serialise` breaks)
+#   prep-env       : STAR / HISAT2 / samtools / StringTie / miniprot
+#   bench-env      : compleasm / BUSCO / OMArk / AGAT / gffcompare
+#
+# GPU-Helixer SPLIT (binding, CLAUDE.md §8): Helixer is GPU-only and OFF the
+# default path — most users supply Helixer output. It is deliberately NOT in this
+# CPU image (its CUDA/TensorFlow stack would bloat the image and pin to a driver).
+# Run Helixer from its own GPU image or a host module (`Helixer.py`, model
+# land_plant_v0.3, pinned 0.3.5) and feed its GFF3 + HDF5 into this image. See
+# containers/README.md.
+# =============================================================================
+
+%files
+    . /opt/helixforge-src
+
+%post
+    set -eux
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    eval "$(micromamba shell hook -s posix)"
+
+    CH="-c conda-forge -c bioconda"
+
+    # --- helixforge-env: the package itself (CPU, pandas >= 2 OK here) ---
+    micromamba create -y -n helixforge-env $CH python=3.10 pip
+    micromamba run -n helixforge-env pip install --no-cache-dir "/opt/helixforge-src[cli,stats,viz]"
+
+    # --- mikado-env: the version-fragile reconcile stack (EXACT pins) ---
+    micromamba create -y -n mikado-env $CH \
+        python=3.9 \
+        mikado=2.3.4 \
+        pandas=1.5.3 \
+        sqlalchemy=1.4.49 \
+        transdecoder=5.5.0 \
+        diamond=2.1.16 \
+        portcullis
+
+    # --- prep-env: read alignment + assembly + protein alignment ---
+    micromamba create -y -n prep-env $CH \
+        star=2.7.11b \
+        hisat2=2.2.1 \
+        samtools=1.21 \
+        stringtie=3.0.3 \
+        miniprot=0.18
+
+    # --- bench-env: benchmarking / completeness tools ---
+    micromamba create -y -n bench-env $CH \
+        compleasm=0.2.6 \
+        busco=5.7.1 \
+        omark=0.3.0 \
+        agat=1.4.1 \
+        gffcompare=0.12.6
+
+    # --- fix shebangs: multi-env PATH causes #!/usr/bin/env to resolve the
+    # wrong interpreter (mikado-env perl/python shadows bench-env). Pin each
+    # env's scripts to its own interpreter so tools find their modules. ---
+    for script in /opt/conda/envs/bench-env/bin/agat_*; do
+        [ -f "$script" ] && sed -i "1s|^#!.*env perl.*|#!/opt/conda/envs/bench-env/bin/perl|" "$script"
+    done
+    for script in /opt/conda/envs/bench-env/bin/busco /opt/conda/envs/bench-env/bin/omark; do
+        [ -f "$script" ] && sed -i "1s|^#!.*env python.*|#!/opt/conda/envs/bench-env/bin/python|" "$script"
+    done
+
+    micromamba clean -y --all
+
+%environment
+    # Put every env's bin dir on PATH so the bare command names in
+    # docs/EXTERNAL_TOOLS.md (and the `helixforge doctor` matrix) all resolve.
+    # helixforge-env is primary (provides the `helixforge` CLI + python).
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    export PATH=/opt/conda/envs/helixforge-env/bin:/opt/conda/envs/mikado-env/bin:/opt/conda/envs/prep-env/bin:/opt/conda/envs/bench-env/bin:$PATH
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+
+%runscript
+    exec helixforge "$@"
+
+%test
+    set -eux
+    export PATH=/opt/conda/envs/helixforge-env/bin:/opt/conda/envs/mikado-env/bin:/opt/conda/envs/prep-env/bin:/opt/conda/envs/bench-env/bin:$PATH
+    # Smoke: the package imports and the pinned reconcile stack resolves.
+    helixforge --help
+    helixforge doctor || true   # non-zero only if a *required* tool is missing
+    mikado --version
+    # pandas/sqlalchemy live in mikado-env — use its python directly
+    /opt/conda/envs/mikado-env/bin/python -c \
+        "import pandas, sqlalchemy; assert pandas.__version__.startswith('1.5.3'), pandas.__version__; print('mikado-env pandas', pandas.__version__, 'sqlalchemy', sqlalchemy.__version__, 'OK')"
+
+%labels
+    Maintainer Arun Seetharam
+    Project HelixForge
+    Version 3.1
+    Description CPU reproducibility image; GPU-Helixer is a separate image/module.
+
+%help
+    HelixForge v3 reproducibility image (CPU). Pins the exact M2/M3 working
+    toolchain from docs/EXTERNAL_TOOLS.md. Helixer (GPU) is intentionally NOT
+    bundled — supply its GFF3 + HDF5 output. See containers/README.md for build
+    and run instructions and how `helixforge doctor` verifies versions inside the
+    image.

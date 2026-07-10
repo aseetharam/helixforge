@@ -1,47 +1,39 @@
-"""Sequence manipulation utilities.
+"""Sequence utilities: complement, translation, codon checks."""
 
-This module provides utilities for working with nucleotide and protein
-sequences:
+from __future__ import annotations
 
-- Reverse complement
-- Translation
-- Codon tables
-- Sequence statistics
+from helixforge.constants import DEFAULT_TRANSL_TABLE
 
-Example:
-    >>> from helixforge.utils.sequences import reverse_complement, translate
-    >>> rc = reverse_complement("ATGCATGC")
-    >>> protein = translate("ATGAAATAG")
+# Strict nucleotide alphabet (unambiguous bases).
+_ACGT = frozenset("ACGT")
 
-TODO:
-    - Implement translation with multiple genetic codes
-    - Add sequence validation
-    - Add ORF finding
-    - Support for ambiguous bases
-"""
-
-from typing import Literal
-
-# =============================================================================
-# Constants
-# =============================================================================
-
-# Standard complement mapping
+# Full IUPAC nucleotide complement map (uppercase). Keys are the complete IUPAC
+# degenerate alphabet, so this doubles as the set of characters the tolerant
+# sequence path accepts. ``N`` -> ``N``; degenerate codes complement to their
+# base-complement set (e.g. ``R`` = A/G -> ``Y`` = T/C).
 COMPLEMENT = {
     "A": "T",
-    "T": "A",
-    "G": "C",
     "C": "G",
+    "G": "C",
+    "T": "A",
     "N": "N",
-    "a": "t",
-    "t": "a",
-    "g": "c",
-    "c": "g",
-    "n": "n",
+    "R": "Y",
+    "Y": "R",  # R=A/G  Y=C/T
+    "S": "S",
+    "W": "W",  # S=G/C  W=A/T  (self-complementary)
+    "K": "M",
+    "M": "K",  # K=G/T  M=A/C
+    "B": "V",
+    "V": "B",  # B=C/G/T  V=A/C/G
+    "D": "H",
+    "H": "D",  # D=A/G/T  H=A/C/T
 }
 
-# Standard genetic code (NCBI Table 1)
-CODON_TABLE_STANDARD = {
+# Set of characters the IUPAC-tolerant path accepts (the COMPLEMENT keys).
+IUPAC_ALPHABET = frozenset(COMPLEMENT)
+
+# Standard genetic code (NCBI translation table 1). 64 entries; '*' = stop.
+CODON_TABLE = {
     "TTT": "F",
     "TTC": "F",
     "TTA": "L",
@@ -108,167 +100,196 @@ CODON_TABLE_STANDARD = {
     "GGG": "G",
 }
 
-# Start codons
-START_CODONS = {"ATG", "CTG", "GTG", "TTG"}
+STANDARD_START_CODONS = ("ATG",)
+STANDARD_STOP_CODONS = ("TAA", "TAG", "TGA")
 
-# Stop codons
-STOP_CODONS = {"TAA", "TAG", "TGA"}
+# --- NCBI alternative translation tables ---
+# Each table is expressed as the set of amino-acid reassignments relative to
+# table 1 (the standard code); ``_build_table`` applies them. Only tables a
+# plant pipeline plausibly needs for organellar contigs are provided — extend
+# this map to add more. Start-codon variation is intentionally NOT encoded
+# Start codons stay ATG by default; the start check is conservative.
+# ``DEFAULT_TRANSL_TABLE`` is sourced from helixforge.constants (the single knob).
+_TABLE_OVERRIDES: dict[int, dict[str, str]] = {
+    2: {"AGA": "*", "AGG": "*", "ATA": "M", "TGA": "W"},  # vertebrate mito
+    4: {"TGA": "W"},  # mold/protozoan/coelenterate mito; Mycoplasma/Spiroplasma
+    11: {},  # bacterial/archaeal/plastid: AA identical to table 1
+}
 
 
-# =============================================================================
-# Complement and Reverse Complement
-# =============================================================================
+def _build_table(table_id: int) -> dict[str, str]:
+    tbl = dict(CODON_TABLE)
+    tbl.update(_TABLE_OVERRIDES[table_id])
+    return tbl
 
 
-def complement(sequence: str) -> str:
-    """Get the complement of a DNA sequence.
+# Public registry: NCBI transl_table id -> codon dict. Table 1 is the canonical
+# ``CODON_TABLE`` object (identity-preserved for backward compatibility).
+CODON_TABLES: dict[int, dict[str, str]] = {1: CODON_TABLE}
+CODON_TABLES.update({tid: _build_table(tid) for tid in _TABLE_OVERRIDES})
 
-    Args:
-        sequence: DNA sequence string.
 
-    Returns:
-        Complement sequence.
+def get_codon_table(transl_table: int = DEFAULT_TRANSL_TABLE) -> dict[str, str]:
+    """Return the codon→amino-acid dict for an NCBI ``transl_table`` id.
+
+    Defaults to table 1 (standard code). Raises ``ValueError`` for an unknown id
+    so a typo fails loudly rather than silently mis-translating.
     """
-    return "".join(COMPLEMENT.get(base, "N") for base in sequence)
+    try:
+        return CODON_TABLES[transl_table]
+    except KeyError:
+        raise ValueError(
+            f"unsupported NCBI transl_table id {transl_table!r}; "
+            f"known tables: {sorted(CODON_TABLES)}"
+        ) from None
 
 
-def reverse_complement(sequence: str) -> str:
-    """Get the reverse complement of a DNA sequence.
+def stop_codons_for_table(transl_table: int = DEFAULT_TRANSL_TABLE) -> tuple[str, ...]:
+    """Return the stop codons (codons mapping to ``'*'``) for ``transl_table``."""
+    tbl = get_codon_table(transl_table)
+    return tuple(c for c, aa in tbl.items() if aa == "*")
 
-    Args:
-        sequence: DNA sequence string.
 
-    Returns:
-        Reverse complement sequence.
+# ---------------------------------------------------------------------------
+# Cleaning / validation
+# ---------------------------------------------------------------------------
+
+
+def _clean(seq: str) -> str:
+    """Uppercase and validate against the IUPAC alphabet (the default path).
+
+    Tolerates ``N``/IUPAC degenerate codes (common in draft plant assemblies);
+    raises ``ValueError`` only on a character outside the IUPAC nucleotide
+    alphabet entirely (e.g. ``'Z'``, ``'1'``).
     """
-    return complement(sequence)[::-1]
+    s = seq.upper()
+    for ch in s:
+        if ch not in IUPAC_ALPHABET:
+            raise ValueError(f"non-IUPAC character {ch!r} in sequence")
+    return s
 
 
-# =============================================================================
-# Translation
-# =============================================================================
+def require_acgt(seq: str) -> str:
+    """Strict path: uppercase and reject any non-ACGT character.
+
+    Retained for callers that genuinely require unambiguous bases. The default
+    sequence helpers use the IUPAC-tolerant :func:`_clean` instead.
+    """
+    s = seq.upper()
+    for ch in s:
+        if ch not in _ACGT:
+            raise ValueError(f"non-ACGT character {ch!r} in sequence")
+    return s
+
+
+def has_ambiguous_base(seq: str) -> bool:
+    """True if ``seq`` contains any base outside strict ACGT (after upper-casing)."""
+    return any(ch not in _ACGT for ch in seq.upper())
+
+
+def reverse_complement(seq: str) -> str:
+    """Reverse complement of an IUPAC nucleotide sequence.
+
+    Complements the full IUPAC alphabet (``N`` -> ``N``, ``R`` -> ``Y``, …);
+    raises ``ValueError`` only on a non-IUPAC character.
+    """
+    s = _clean(seq)
+    return "".join(COMPLEMENT[ch] for ch in reversed(s))
 
 
 def translate(
-    sequence: str,
-    table: int = 1,
-    to_stop: bool = False,
+    seq: str, phase: int = 0, transl_table: int = DEFAULT_TRANSL_TABLE
 ) -> str:
-    """Translate a DNA sequence to protein.
+    """Translate ``seq`` to a protein string starting at offset ``phase``.
 
-    Args:
-        sequence: DNA coding sequence.
-        table: NCBI genetic code table number.
-        to_stop: If True, stop at first stop codon.
-
-    Returns:
-        Amino acid sequence.
-
-    Raises:
-        ValueError: If sequence length is not a multiple of 3.
+    Trailing 1–2 nt that do not form a full codon are ignored. Stop codons
+    translate to ``'*'``. Any codon containing an ``N``/IUPAC ambiguous base
+    (or otherwise absent from the chosen table) translates to ``'X'`` — never an
+    exception. ``transl_table`` selects the NCBI genetic code.
     """
-    if len(sequence) % 3 != 0:
-        raise ValueError(f"Sequence length ({len(sequence)}) is not a multiple of 3")
-
-    # Get codon table
-    if table != 1:
-        raise NotImplementedError(f"Genetic code table {table} not yet implemented")
-
-    codon_table = CODON_TABLE_STANDARD
+    if phase not in (0, 1, 2):
+        raise ValueError(f"phase must be 0, 1 or 2, got {phase}")
+    table = get_codon_table(transl_table)
+    s = _clean(seq)
     protein = []
-
-    for i in range(0, len(sequence), 3):
-        codon = sequence[i : i + 3].upper()
-        aa = codon_table.get(codon, "X")
-
-        if aa == "*" and to_stop:
-            break
-
-        protein.append(aa)
-
+    for i in range(phase, len(s) - 2, 3):
+        protein.append(table.get(s[i : i + 3], "X"))
     return "".join(protein)
 
 
-def find_orfs(
-    sequence: str,
-    min_length: int = 100,
-    strand: Literal["+", "-", "both"] = "both",
-) -> list[tuple[int, int, str, str]]:
-    """Find open reading frames in a sequence.
+def is_start_codon(
+    codon: str, start_codons: tuple[str, ...] = STANDARD_START_CODONS
+) -> bool:
+    """True if ``codon`` is a start codon (default: ATG).
 
-    Args:
-        sequence: DNA sequence.
-        min_length: Minimum ORF length in nucleotides.
-        strand: Which strand(s) to search.
-
-    Returns:
-        List of (start, end, strand, protein) tuples.
+    An ambiguous (``N``/IUPAC) codon is *not* a start codon (returns ``False``,
+    never raises); callers that need to distinguish "ambiguous" from "absent"
+    should test :func:`has_ambiguous_base` first.
     """
-    # TODO: Implement ORF finding
-    raise NotImplementedError("find_orfs not yet implemented")
+    return _clean(codon) in start_codons
 
 
-# =============================================================================
-# Sequence Statistics
-# =============================================================================
+def is_stop_codon(codon: str, transl_table: int = DEFAULT_TRANSL_TABLE) -> bool:
+    """True if ``codon`` is a stop codon under ``transl_table``.
 
-
-def gc_content(sequence: str) -> float:
-    """Calculate GC content of a sequence.
-
-    Args:
-        sequence: DNA sequence.
-
-    Returns:
-        GC content as a fraction (0.0 to 1.0).
+    An ambiguous codon translates to ``'X'`` and is therefore *not* a stop
+    (returns ``False``, never raises).
     """
-    if not sequence:
-        return 0.0
-
-    sequence = sequence.upper()
-    gc = sum(1 for base in sequence if base in "GC")
-    return gc / len(sequence)
+    return get_codon_table(transl_table).get(_clean(codon)) == "*"
 
 
-def count_nucleotides(sequence: str) -> dict[str, int]:
-    """Count nucleotides in a sequence.
+def check_internal_stops(
+    seq: str, phase: int = 0, transl_table: int = DEFAULT_TRANSL_TABLE
+) -> list[int]:
+    """Return nucleotide positions of stop codons that are *not* the final codon.
 
-    Args:
-        sequence: DNA sequence.
-
-    Returns:
-        Dictionary mapping nucleotide to count.
+    A premature (internal) stop indicates a broken ORF.
+    Positions are 0-based indices into ``seq`` of the stop codon's first base.
+    An ``N``/IUPAC codon translates to ``'X'`` and is treated as "unknown," not a
+    premature stop — never raises on ambiguity.
     """
-    counts = {"A": 0, "T": 0, "G": 0, "C": 0, "N": 0}
-    for base in sequence.upper():
-        if base in counts:
-            counts[base] += 1
-        else:
-            counts["N"] += 1
-    return counts
+    table = get_codon_table(transl_table)
+    s = _clean(seq)
+    codon_starts = list(range(phase, len(s) - 2, 3))
+    last = codon_starts[-1] if codon_starts else None
+    positions = []
+    for i in codon_starts:
+        if table.get(s[i : i + 3], "X") == "*" and i != last:
+            positions.append(i)
+    return positions
 
 
-def is_valid_dna(sequence: str) -> bool:
-    """Check if a sequence contains only valid DNA bases.
+def extract_start_codon(genome_seq: str, cds_start: int, strand: str) -> str:
+    """Extract the start codon (3 nt, coding direction) from a contig sequence.
 
-    Args:
-        sequence: Sequence to check.
-
-    Returns:
-        True if sequence is valid DNA.
+    ``genome_seq`` is the plus-strand contig sequence. For ``+`` strand,
+    ``cds_start`` is the low genomic coordinate of the CDS 5' end and the codon
+    is ``genome_seq[cds_start:cds_start+3]``. For ``-`` strand, ``cds_start`` is
+    the *high* genomic coordinate (the 5' end in coding direction) and the codon
+    is ``reverse_complement(genome_seq[cds_start-3:cds_start])``. Tolerates
+    ``N``/IUPAC bases.
     """
-    valid_bases = set("ATGCNatgcn")
-    return all(base in valid_bases for base in sequence)
+    _validate_strand_arg(strand)
+    if strand == "+":
+        return _clean(genome_seq[cds_start : cds_start + 3])
+    return reverse_complement(genome_seq[cds_start - 3 : cds_start])
 
 
-def is_valid_protein(sequence: str) -> bool:
-    """Check if a sequence contains only valid amino acids.
+def extract_stop_codon_after_cds(genome_seq: str, cds_end: int, strand: str) -> str:
+    """Extract the stop codon immediately following the CDS 3' end.
 
-    Args:
-        sequence: Sequence to check.
-
-    Returns:
-        True if sequence is valid protein.
+    ``genome_seq`` is the plus-strand contig sequence. For ``+`` strand,
+    ``cds_end`` is the half-open high coordinate of the CDS and the stop codon is
+    ``genome_seq[cds_end:cds_end+3]``. For ``-`` strand, ``cds_end`` is the low
+    genomic coordinate of the CDS and the stop (downstream = lower coords) is
+    ``reverse_complement(genome_seq[cds_end-3:cds_end])``. Tolerates ``N``/IUPAC.
     """
-    valid_aa = set("ACDEFGHIKLMNPQRSTVWY*X")
-    return all(aa in valid_aa for aa in sequence.upper())
+    _validate_strand_arg(strand)
+    if strand == "+":
+        return _clean(genome_seq[cds_end : cds_end + 3])
+    return reverse_complement(genome_seq[cds_end - 3 : cds_end])
+
+
+def _validate_strand_arg(strand: str) -> None:
+    if strand not in ("+", "-"):
+        raise ValueError(f"strand must be '+' or '-', got {strand!r}")

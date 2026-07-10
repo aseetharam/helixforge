@@ -1,253 +1,75 @@
-"""Genomic interval operations.
+"""Interval index over NCLS (Nested Containment List)."""
 
-This module provides utilities for working with genomic intervals:
+from __future__ import annotations
 
-- Overlap detection
-- Interval merging
-- Interval subtraction
-- Coverage calculation
+from collections.abc import Iterable, Sequence
+from typing import Any
 
-Example:
-    >>> from helixforge.utils.intervals import find_overlaps, merge_intervals
-    >>> overlaps = find_overlaps(query, targets)
-    >>> merged = merge_intervals(intervals)
-
-TODO:
-    - Implement interval operations
-    - Add interval tree for efficient queries
-    - Support for strand-aware operations
-    - Add BED format support
-"""
-
-from typing import NamedTuple
-
-# =============================================================================
-# Data Structures
-# =============================================================================
+import numpy as np
+from ncls import NCLS
 
 
-class Interval(NamedTuple):
-    """A simple genomic interval.
+def bounds(item: Any) -> tuple[int, int]:
+    """Return ``(start, end)`` from an ``.start``/``.end`` object or a 2-tuple.
 
-    Attributes:
-        start: Start position (0-based, inclusive).
-        end: End position (0-based, exclusive).
+    Canonical interval-accessor (de-duplicated from
+    ``reconcile/{mikado_integrate,as_events}.py``). Objects
+    carrying ``.start``/``.end`` (Exon, CDSSegment, Interval) are read by
+    attribute; anything else is treated as an indexable ``(start, end, ...)``.
+    """
+    if hasattr(item, "start"):
+        return item.start, item.end
+    return item[0], item[1]
+
+
+class IntervalIndex:
+    """A queryable index of intervals carrying arbitrary tuple payloads.
+
+    Each added interval is a tuple ``(start, end, *data)``; the integer id
+    returned by :meth:`query` is its insertion index. :meth:`query_with_data`
+    returns the full stored tuples for overlapping intervals.
     """
 
-    start: int
-    end: int
+    def __init__(self) -> None:
+        self._intervals: list[tuple[Any, ...]] = []
+        self._ncls: NCLS | None = None
+
+    def add_intervals(self, intervals: Iterable[Sequence[Any]]) -> None:
+        """Add a list of ``(start, end, *data)`` tuples and (re)build the index."""
+        for iv in intervals:
+            iv = tuple(iv)
+            if len(iv) < 2:
+                raise ValueError(
+                    f"interval must have at least (start, end), got {iv!r}"
+                )
+            start, end = int(iv[0]), int(iv[1])
+            if end <= start:
+                raise ValueError(f"require start < end, got {start}-{end}")
+            self._intervals.append((start, end) + iv[2:])
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        if not self._intervals:
+            self._ncls = None
+            return
+        starts = np.array([iv[0] for iv in self._intervals], dtype=np.int64)
+        ends = np.array([iv[1] for iv in self._intervals], dtype=np.int64)
+        ids = np.arange(len(self._intervals), dtype=np.int64)
+        self._ncls = NCLS(starts, ends, ids)
+
+    def query(self, start: int, end: int) -> list[int]:
+        """Return sorted ids of intervals overlapping ``[start, end)``."""
+        if self._ncls is None:
+            return []
+        return sorted(i for _, _, i in self._ncls.find_overlap(int(start), int(end)))
+
+    def query_with_data(self, start: int, end: int) -> list[tuple[Any, ...]]:
+        """Return the stored ``(start, end, *data)`` tuples overlapping ``[start, end)``."""
+        return [self._intervals[i] for i in self.query(start, end)]
+
+    def __len__(self) -> int:
+        return len(self._intervals)
 
     @property
-    def length(self) -> int:
-        """Get interval length."""
-        return self.end - self.start
-
-    def overlaps(self, other: "Interval") -> bool:
-        """Check if this interval overlaps another."""
-        return self.start < other.end and other.start < self.end
-
-    def contains(self, position: int) -> bool:
-        """Check if this interval contains a position."""
-        return self.start <= position < self.end
-
-
-class GenomicInterval(NamedTuple):
-    """A genomic interval with chromosome and strand.
-
-    Attributes:
-        seqid: Chromosome/contig identifier.
-        start: Start position (0-based, inclusive).
-        end: End position (0-based, exclusive).
-        strand: Strand (+ or -).
-    """
-
-    seqid: str
-    start: int
-    end: int
-    strand: str = "+"
-
-    @property
-    def length(self) -> int:
-        """Get interval length."""
-        return self.end - self.start
-
-    def to_interval(self) -> Interval:
-        """Convert to simple Interval."""
-        return Interval(self.start, self.end)
-
-
-# =============================================================================
-# Overlap Operations
-# =============================================================================
-
-
-def overlaps(a: Interval, b: Interval) -> bool:
-    """Check if two intervals overlap.
-
-    Args:
-        a: First interval.
-        b: Second interval.
-
-    Returns:
-        True if intervals overlap.
-    """
-    return a.start < b.end and b.start < a.end
-
-
-def overlap_length(a: Interval, b: Interval) -> int:
-    """Calculate overlap length between two intervals.
-
-    Args:
-        a: First interval.
-        b: Second interval.
-
-    Returns:
-        Overlap length (0 if no overlap).
-    """
-    if not overlaps(a, b):
-        return 0
-    return min(a.end, b.end) - max(a.start, b.start)
-
-
-def find_overlaps(
-    query: Interval,
-    targets: list[Interval],
-) -> list[tuple[int, Interval]]:
-    """Find all intervals that overlap a query.
-
-    Args:
-        query: Query interval.
-        targets: List of target intervals.
-
-    Returns:
-        List of (index, interval) tuples for overlapping intervals.
-    """
-    result = []
-    for i, target in enumerate(targets):
-        if overlaps(query, target):
-            result.append((i, target))
-    return result
-
-
-# =============================================================================
-# Merge Operations
-# =============================================================================
-
-
-def merge_intervals(intervals: list[Interval]) -> list[Interval]:
-    """Merge overlapping intervals.
-
-    Args:
-        intervals: List of intervals to merge.
-
-    Returns:
-        List of merged intervals.
-    """
-    if not intervals:
-        return []
-
-    # Sort by start position
-    sorted_intervals = sorted(intervals, key=lambda x: x.start)
-
-    merged = [sorted_intervals[0]]
-    for current in sorted_intervals[1:]:
-        last = merged[-1]
-        if current.start <= last.end:
-            # Overlapping, extend the last interval
-            merged[-1] = Interval(last.start, max(last.end, current.end))
-        else:
-            # Non-overlapping, add new interval
-            merged.append(current)
-
-    return merged
-
-
-def merge_genomic_intervals(
-    intervals: list[GenomicInterval],
-    strand_aware: bool = False,
-) -> list[GenomicInterval]:
-    """Merge overlapping genomic intervals.
-
-    Args:
-        intervals: List of genomic intervals.
-        strand_aware: If True, only merge same-strand intervals.
-
-    Returns:
-        List of merged genomic intervals.
-    """
-    # TODO: Implement genomic interval merging
-    raise NotImplementedError("merge_genomic_intervals not yet implemented")
-
-
-# =============================================================================
-# Subtraction Operations
-# =============================================================================
-
-
-def subtract_intervals(
-    intervals: list[Interval],
-    to_remove: list[Interval],
-) -> list[Interval]:
-    """Subtract intervals from a set of intervals.
-
-    Args:
-        intervals: Base intervals.
-        to_remove: Intervals to remove.
-
-    Returns:
-        Remaining intervals after subtraction.
-    """
-    # TODO: Implement interval subtraction
-    raise NotImplementedError("subtract_intervals not yet implemented")
-
-
-# =============================================================================
-# Coverage Operations
-# =============================================================================
-
-
-def calculate_coverage(
-    intervals: list[Interval],
-    region: Interval,
-) -> float:
-    """Calculate fraction of a region covered by intervals.
-
-    Args:
-        intervals: Intervals providing coverage.
-        region: Region to calculate coverage for.
-
-    Returns:
-        Coverage fraction (0.0 to 1.0).
-    """
-    if region.length == 0:
-        return 0.0
-
-    # Merge intervals and intersect with region
-    merged = merge_intervals(intervals)
-    covered = 0
-
-    for interval in merged:
-        # Intersect with region
-        start = max(interval.start, region.start)
-        end = min(interval.end, region.end)
-        if start < end:
-            covered += end - start
-
-    return covered / region.length
-
-
-def interval_gaps(
-    intervals: list[Interval],
-    region: Interval,
-) -> list[Interval]:
-    """Find gaps between intervals within a region.
-
-    Args:
-        intervals: Intervals to find gaps between.
-        region: Bounding region.
-
-    Returns:
-        List of gap intervals.
-    """
-    # TODO: Implement gap finding
-    raise NotImplementedError("interval_gaps not yet implemented")
+    def is_empty(self) -> bool:
+        return len(self._intervals) == 0

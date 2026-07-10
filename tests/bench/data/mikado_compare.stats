@@ -1,0 +1,15 @@
+Command line: /opt/mikado/bin/mikado compare -r araport11.gff3 -p helixforge.gff3 -o cmp
+  48359 reference RNAs in 27416 reference genes
+  34765 predicted RNAs in 27184 predicted genes
+  Matching: in prediction; in reference.
+  Matching: 30000  31000.
+                    Base level: 78.34  85.21  81.63
+        Exon level (stringent): 65.12  70.45  67.68
+          Exon level (lenient): 72.30  78.11  75.09
+                   Splice site: 88.10  90.22  89.15
+                  Intron level: 85.44  88.92  87.15
+            Intron chain level: 55.20  60.13  57.56
+  Transcript level (stringent): 40.11  45.32  42.56
+Transcript level (>=95% base F1): 48.00  52.10  49.97
+Transcript level (>=80% base F1): 60.25  64.40  62.26
+                    Gene level: 70.50  72.10  71.29

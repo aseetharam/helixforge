@@ -1,0 +1,53 @@
+# External tools HelixForge orchestrates by subprocess (NOT Python deps of the package).
+# Pin exact versions at build time; confirm `mikado --version` matches the scoring-file
+# schema in docs/scoring/. Prefer building these into an Apptainer image for HPC reproducibility
+# (this is the PEARC reproducibility-ladder story — version provenance is a feature).
+#
+#   mamba env create -f environment.yml
+#   mamba activate helixforge-tools
+#
+# Portcullis (C++/autotools) is the build-fragile one: if the conda build fails on your
+# platform, use a biocontainer instead and point HelixForge at it, or fall back to the
+# in-house JunctionExtractor emitting Portcullis-format .tab (see mikado/emit_junctions.py).
+#
+# Helixer itself (GPU, weberlab-hhu + land_plant_v0.3 model) is run SEPARATELY upstream to
+# produce the GFF3 + HDF5 inputs; it is intentionally not in this env.
+
+name: helixforge-tools
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.10
+  # --- reconciliation core ---
+  # Pins are the TAIR10-milestone verified working set (docs/EXTERNAL_TOOLS.md
+  # + prep/doctor.py:TOOL_MATRIX) — kept in lockstep (Phase 33 D3). Mikado 2.x
+  # needs the locked pandas 1.5.3 / sqlalchemy 1.4.49 for serialise (pandas >= 2
+  # raises `'Engine' has no attribute 'cursor'`). diamond is pinned here, but in
+  # split-env setups it lives only in the generic `mikado` env — cold runs then
+  # pass it across with DIAMOND_BIN (see docs/EXTERNAL_TOOLS.md cross-env note).
+  - mikado=2.3.4
+  - pandas=1.5.3
+  - sqlalchemy=1.4.49
+  - portcullis
+  - transdecoder=5.5.0
+  - diamond=2.1.16
+  # --- alignment / prep helpers (if doing alignment + assembly in-pipeline) ---
+  - samtools=1.21
+  - hisat2=2.2.1
+  - star=2.7.11b
+  - stringtie=3.0.3
+  # --- protein-to-genome (optional, backstop + cross-check) ---
+  - miniprot=0.18
+  # --- structured-ncRNA hook (optional, off the default path) ---
+  - trnascan-se=2.0.12
+  - infernal=1.1.5
+  # --- benchmarking (Phase 11) ---
+  - gffcompare=0.12.6
+  - compleasm=0.2.6
+  - busco=5.7.1
+  - omark=0.3.0
+  - agat=1.4.1
+  # pip-install helixforge itself into this env (`pip install -e .`) so the
+  # `helixforge` console script imports THIS repo, not a stale tree — a
+  # mis-pointed shim is exactly what `helixforge doctor` flags (Phase 33 D4).
