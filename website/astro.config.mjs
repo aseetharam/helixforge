@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import rehypeBase from './rehype-base.mjs';
 
 // ---------------------------------------------------------------------------
 // DEPLOYMENT BASE PATH
@@ -25,7 +26,14 @@ export default defineConfig({
   // rewrites double-hyphen flags in prose (e.g. `--transl-table`) into an
   // em-dash (`—transl-table`), which is both wrong and reintroduces the very
   // em-dashes we remove elsewhere. Flags must render literally.
-  markdown: { smartypants: false },
+  //
+  // rehypeBase prepends BASE to root-absolute links authored in Markdown/MDX
+  // content, which Astro otherwise ships verbatim (breaking every in-content
+  // link on a project site served under a base path).
+  markdown: {
+    smartypants: false,
+    rehypePlugins: [[rehypeBase, { base: BASE }]],
+  },
   // Emit clean directory-style URLs (…/tutorial/reconcile/) that resolve on
   // GitHub Pages without a trailing-slash redirect.
   trailingSlash: 'always',

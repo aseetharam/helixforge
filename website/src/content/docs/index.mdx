@@ -5,16 +5,19 @@ template: splash
 hero:
   tagline: Isoform-aware refinement of Helixer annotations via Mikado reconciliation. The predictor is the backbone; evidence refines a model only where it demonstrably improves it.
   actions:
+    # Hero links are static frontmatter (no JS), and Starlight does not prepend
+    # the base path here, so the base '/helixforge/' is written literally. Keep
+    # it in sync with BASE in astro.config.mjs.
     - text: Maize tutorial
-      link: /tutorial/inputs/
+      link: /helixforge/tutorial/inputs/
       icon: right-arrow
       variant: primary
     - text: Install
-      link: /installation/
+      link: /helixforge/installation/
       icon: download
       variant: secondary
     - text: CLI reference
-      link: /cli/
+      link: /helixforge/cli/
       icon: open-book
       variant: minimal
 ---
@@ -89,9 +92,11 @@ repaired heuristically.
 
 ## Start here
 
+{/* LinkCard hrefs are component props (not Markdown links), so the rehype-base
+    plugin does not rewrite them — prepend the base via import.meta.env.BASE_URL. */}
 <CardGrid>
-  <LinkCard title="Install HelixForge" href="/installation/" description="pip + extras, the external-tool list, and the doctor preflight." />
-  <LinkCard title="Maize (B73) tutorial" href="/tutorial/inputs/" description="A complete end-to-end walkthrough in the order data actually flows." />
-  <LinkCard title="CLI reference" href="/cli/" description="Every command and subcommand, generated from the live CLI." />
-  <LinkCard title="Benchmarks" href="/benchmarks/" description="Maize B73 vs the NAM v5 reference annotation." />
+  <LinkCard title="Install HelixForge" href={`${import.meta.env.BASE_URL}installation/`} description="pip + extras, the external-tool list, and the doctor preflight." />
+  <LinkCard title="Maize (B73) tutorial" href={`${import.meta.env.BASE_URL}tutorial/inputs/`} description="A complete end-to-end walkthrough in the order data actually flows." />
+  <LinkCard title="CLI reference" href={`${import.meta.env.BASE_URL}cli/`} description="Every command and subcommand, generated from the live CLI." />
+  <LinkCard title="Benchmarks" href={`${import.meta.env.BASE_URL}benchmarks/`} description="Maize B73 vs the NAM v5 reference annotation." />
 </CardGrid>

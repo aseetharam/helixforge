@@ -9,6 +9,8 @@
     "dev": "npm run sync-cli && astro dev",
     "start": "npm run sync-cli && astro dev",
     "build": "npm run sync-cli && astro build",
+    "postbuild": "node check-links.mjs",
+    "check-links": "node check-links.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
