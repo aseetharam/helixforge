@@ -21,7 +21,6 @@ All notable changes to HelixForge are recorded here. The format loosely follows
 - `stats/genome_report.py`: genome-wide QC report with embedded charts
 
 ### Changed
-- Removed 153 CLAUDE.md inline references from source code
 - Replaced stale GUIDE.md (described v1 architecture) with current summary
 - Normalized docstring tone across codebase
 - Version bumped from 3.0.0.dev0 to 4.0.0.dev0
